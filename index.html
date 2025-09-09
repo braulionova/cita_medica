@@ -2,49 +2,62 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"> <!-- Importante para móviles -->
   <title>Registro de Cita Médica</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+<body class="bg-gray-100 flex items-center justify-center min-h-screen px-4">
 
-  <div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-lg">
-    <h2 class="text-2xl font-bold mb-6 text-center text-gray-800">Registro de Cita Médica</h2>
-    
-    <form id="citaForm" class="space-y-4">
+  <div class="bg-white p-6 sm:p-8 rounded-2xl shadow-xl w-full max-w-lg">
+    <h2 class="text-xl sm:text-2xl font-bold mb-6 text-center text-gray-800">Registro de Cita Médica</h2>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="mb-4">
+          {% for category, message in messages %}
+            <div class="p-3 rounded bg-green-100 text-green-800 text-sm sm:text-base">
+              {{ message }}
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <form method="POST" class="space-y-4">
       
       <!-- Nombre -->
       <div>
-        <label class="block text-gray-700 mb-1">Nombre completo</label>
+        <label class="block text-gray-700 mb-1 text-sm sm:text-base">Nombre completo</label>
         <input type="text" name="nombre" required
-          class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+          class="w-full px-3 sm:px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm sm:text-base">
       </div>
       
       <!-- Teléfono -->
       <div>
-        <label class="block text-gray-700 mb-1">Teléfono</label>
+        <label class="block text-gray-700 mb-1 text-sm sm:text-base">Teléfono</label>
         <input type="tel" name="telefono" required
-          class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+          class="w-full px-3 sm:px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm sm:text-base">
       </div>
 
       <!-- Email -->
       <div>
-        <label class="block text-gray-700 mb-1">Correo electrónico</label>
-        <input type="email" name="email"
-          class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+        <label class="block text-gray-700 mb-1 text-sm sm:text-base">Correo electrónico</label>
+        <input type="email" name="email" required
+          class="w-full px-3 sm:px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm sm:text-base">
+      </div>
+
+      <!-- Fecha -->
+      <div>
+        <label class="block text-gray-700 mb-1 text-sm sm:text-base">Fecha de la cita</label>
+        <input type="date" name="fecha" required
+          class="w-full px-3 sm:px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm sm:text-base">
       </div>
       
-      <!-- Fecha y hora -->
+      <!-- Motivo -->
       <div>
-        <label class="block text-gray-700 mb-1">Fecha y hora de la cita</label>
-        <input type="datetime-local" name="fecha" required
-          class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
-      </div>
-      
-      <!-- Motivo de la cita -->
-      <div>
-        <label class="block text-gray-700 mb-1">Motivo de la consulta</label>
+        <label class="block text-gray-700 mb-1 text-sm sm:text-base">Motivo de la consulta</label>
         <select name="motivo" required
-          class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+          class="w-full px-3 sm:px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm sm:text-base">
           <option value="">Seleccione...</option>
           <option value="ginecologica">Consulta ginecológica</option>
           <option value="mama">Consulta de mama</option>
@@ -53,21 +66,24 @@
           <option value="resultados">Entrega de resultados</option>
         </select>
       </div>
+
+      <!-- Tanda -->
+      <div>
+        <label class="block text-gray-700 mb-1 text-sm sm:text-base">Tanda</label>
+        <select name="tanda" required
+          class="w-full px-3 sm:px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm sm:text-base">
+          <option value="">Seleccione...</option>
+          <option value="mañana">Mañana</option>
+          <option value="tarde">Tarde</option>
+        </select>
+      </div>
       
       <!-- Botón -->
       <button type="submit"
-        class="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition">
+        class="w-full bg-blue-600 text-white py-2 sm:py-3 px-4 rounded-lg hover:bg-blue-700 transition text-sm sm:text-base">
         Registrar Cita
       </button>
     </form>
   </div>
-
-  <script>
-    document.getElementById("citaForm").addEventListener("submit", function(e) {
-      e.preventDefault();
-      alert("✅ Cita registrada correctamente");
-      this.reset();
-    });
-  </script>
 </body>
 </html>
