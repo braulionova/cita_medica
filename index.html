@@ -6,7 +6,7 @@
   <title>Registro de Cita Médica</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-100 flex items-center justify-center min-h-screen px-4">
+<body class="bg-gray-100 flex items-center justify-center min-h-screen px-4 py-8">
 
   <div class="bg-white p-6 sm:p-8 rounded-2xl shadow-xl w-full max-w-lg">
     <h2 class="text-xl sm:text-2xl font-bold mb-6 text-center text-gray-800">Registro de Cita Médica</h2>
@@ -15,7 +15,8 @@
       {% if messages %}
         <div class="mb-4">
           {% for category, message in messages %}
-            <div class="p-3 rounded bg-green-100 text-green-800 text-sm sm:text-base">
+            <div class="p-3 rounded text-sm sm:text-base
+              {% if category == 'success' %} bg-green-100 text-green-800 {% else %} bg-red-100 text-red-800 {% endif %}">
               {{ message }}
             </div>
           {% endfor %}
@@ -27,36 +28,68 @@
       
       <!-- Nombre -->
       <div>
-        <label class="block text-gray-700 mb-1 text-sm sm:text-base">Nombre completo</label>
-        <input type="text" name="nombre" required
+        <label for="nombre" class="block text-gray-700 mb-1 text-sm sm:text-base">Nombre completo</label>
+        <input type="text" id="nombre" name="nombre" required
           class="w-full px-3 sm:px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm sm:text-base">
       </div>
       
       <!-- Teléfono -->
       <div>
-        <label class="block text-gray-700 mb-1 text-sm sm:text-base">Teléfono</label>
-        <input type="tel" name="telefono" required
+        <label for="telefono" class="block text-gray-700 mb-1 text-sm sm:text-base">Teléfono</label>
+        <input type="tel" id="telefono" name="telefono" required
           class="w-full px-3 sm:px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm sm:text-base">
       </div>
 
-      <!-- Email -->
+      <!-- AÑADIDO: Email (requerido por la base de datos) -->
       <div>
-        <label class="block text-gray-700 mb-1 text-sm sm:text-base">Correo electrónico</label>
-        <input type="email" name="email" required
+        <label for="email" class="block text-gray-700 mb-1 text-sm sm:text-base">Correo electrónico</label>
+        <input type="email" id="email" name="email" required
+          class="w-full px-3 sm:px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm sm:text-base">
+      </div>
+
+      <!-- AÑADIDO: Tipo de Seguro Médico -->
+      <div>
+        <label for="tipo_seguro_medico" class="block text-gray-700 mb-1 text-sm sm:text-base">Tipo de Seguro Médico</label>
+        <select id="tipo_seguro_medico" name="tipo_seguro_medico" required
+          class="w-full px-3 sm:px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm sm:text-base">
+          <option value="">Seleccione...</option>
+          <option value="Publico">Público</option>
+          <option value="Privado">Privado</option>
+        </select>
+      </div>
+
+      <!-- AÑADIDO: Nombre del Seguro Médico (con opción de escribir) -->
+      <div>
+        <label for="nombre_seguro_medico" class="block text-gray-700 mb-1 text-sm sm:text-base">Nombre del Seguro Médico</label>
+        <input list="seguros-list" id="nombre_seguro_medico" name="nombre_seguro_medico"
+          placeholder="Seleccione o escriba el nombre..."
+          class="w-full px-3 sm:px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm sm:text-base">
+        <datalist id="seguros-list">
+          <option value="Senasa">
+          <option value="Humano">
+          <option value="Universal">
+          <option value="Otro">
+        </datalist>
+      </div>
+
+      <!-- ACTUALIZADO: Numero de seguro medico -->
+      <div>
+        <label for="numero_seguro_medico" class="block text-gray-700 mb-1 text-sm sm:text-base">Número de Afiliado / Póliza</label>
+        <input id="numero_seguro_medico" name="numero_seguro_medico"
           class="w-full px-3 sm:px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm sm:text-base">
       </div>
 
       <!-- Fecha -->
       <div>
-        <label class="block text-gray-700 mb-1 text-sm sm:text-base">Fecha de la cita</label>
-        <input type="date" name="fecha" required
+        <label for="fecha" class="block text-gray-700 mb-1 text-sm sm:text-base">Fecha de la cita</label>
+        <input type="date" id="fecha" name="fecha" required
           class="w-full px-3 sm:px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm sm:text-base">
       </div>
       
       <!-- Motivo -->
       <div>
-        <label class="block text-gray-700 mb-1 text-sm sm:text-base">Motivo de la consulta</label>
-        <select name="motivo" required
+        <label for="motivo" class="block text-gray-700 mb-1 text-sm sm:text-base">Motivo de la consulta</label>
+        <select id="motivo" name="motivo" required
           class="w-full px-3 sm:px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm sm:text-base">
           <option value="">Seleccione...</option>
           <option value="ginecologica">Consulta ginecológica</option>
@@ -69,8 +102,8 @@
 
       <!-- Tanda -->
       <div>
-        <label class="block text-gray-700 mb-1 text-sm sm:text-base">Tanda</label>
-        <select name="tanda" required
+        <label for="tanda" class="block text-gray-700 mb-1 text-sm sm:text-base">Tanda</label>
+        <select id="tanda" name="tanda" required
           class="w-full px-3 sm:px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm sm:text-base">
           <option value="">Seleccione...</option>
           <option value="mañana">Mañana</option>
