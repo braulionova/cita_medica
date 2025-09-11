@@ -24,10 +24,10 @@ def registrar_cita():
         email = "" # <-- AÑADIDO: Campo email requerido por la BD
         fecha = request.form["fecha"]
         motivo = request.form["motivo"]
-        tanda = request.form["tanda"]
+        tanda = ""
         numero_seguro_medico = request.form["numero_seguro_medico"] # <-- ACTUALIZADO Y AÑADIDO
         nombre_seguro_medico = request.form["nombre_seguro_medico"] # <-- AÑADIDO
-        tipo_seguro_medico = request.form["tipo_seguro_medico"]   # <-- AÑADIDO
+        tipo_seguro_medico = ""
 
         # Crear el diccionario de datos para insertar en Supabase
         # IMPORTANTE: Las claves deben coincidir con los nombres de las columnas en la BD
