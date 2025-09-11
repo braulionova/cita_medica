@@ -1,0 +1,89 @@
+<!-- templates/admin.html -->
+{% extends "admin_layout.html" %}
+
+{% block title %}Panel Principal{% endblock %}
+
+{% block content %}
+  <h1 class="text-2xl font-bold mb-6">📋 Panel de Administración</h1>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div class="mb-4">
+        {% for category, message in messages %}
+          <div class="p-3 rounded {% if category == 'success' %}bg-green-100 text-green-800{% else %}bg-red-100 text-red-800{% endif %}">
+            {{ message }}
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  <!-- TABLA DE CITAS -->
+  <div class="bg-white shadow-md rounded-lg p-4 mb-8 overflow-x-auto">
+    <h2 class="text-xl font-semibold mb-4">📅 Citas Registradas</h2>
+    <table class="w-full border-collapse">
+      <thead>
+        <tr class="bg-gray-200 text-gray-700 text-sm">
+          <th class="p-2 border">ID</th>
+          <th class="p-2 border">Nombre</th>
+          <th class="p-2 border">Teléfono</th>
+          <th class="p-2 border">Fecha</th>
+          <th class="p-2 border">Motivo</th>
+          <th class="p-2 border">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for cita in citas %}
+        <tr class="text-sm text-gray-700 hover:bg-gray-50">
+          <td class="p-2 border">{{ cita.id }}</td>
+          <td class="p-2 border">{{ cita.nombre }}</td>
+          <td class="p-2 border">{{ cita.telefono }}</td>
+          <td class="p-2 border">{{ cita.fecha }}</td>
+          <td class="p-2 border">{{ cita.motivo }}</td>
+          <td class="p-2 border text-center">
+            <!-- BOTÓN ACTUALIZADO -->
+            <a href="{{ url_for('mover_cita', id=cita.id) }}" class="bg-blue-500 text-white px-3 py-1 rounded text-xs hover:bg-blue-600 transition">
+              Mover Cita
+            </a>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="text-center p-4 text-gray-500">No hay citas registradas</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- TABLA DE FECHAS BLOQUEADAS -->
+  <div class="bg-white shadow-md rounded-lg p-4 overflow-x-auto">
+      <h2 class="text-xl font-semibold mb-4">🚫 Fechas Bloqueadas</h2>
+      <table class="w-full border-collapse">
+        <thead>
+          <tr class="bg-gray-200 text-gray-700 text-sm">
+            <th class="p-2 border">ID</th>
+            <th class="p-2 border">Fecha</th>
+            <th class="p-2 border">Motivo</th>
+            <th class="p-2 border">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for f in bloqueadas %}
+          <tr class="text-sm text-gray-700 hover:bg-gray-50">
+            <td class="p-2 border">{{ f.id }}</td>
+            <td class="p-2 border">{{ f.fecha }}</td>
+            <td class="p-2 border">{{ f.motivo or "—" }}</td>
+            <td class="p-2 border text-center">
+              <form method="POST" action="{{ url_for('desbloquear', id=f.id) }}">
+                <button type="submit" class="bg-green-500 text-white px-3 py-1 rounded text-xs hover:bg-green-600">
+                  Desbloquear
+                </button>
+              </form>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4" class="text-center p-4 text-gray-500">No hay fechas bloqueadas</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+{% endblock %}

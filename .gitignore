@@ -1,0 +1,31 @@
+# ==================================
+#  Entorno y Credenciales
+# ==================================
+# Ignorar el archivo de variables de entorno. Contiene secretos.
+.env
+# Ignorar otros posibles archivos de entorno
+.env.*
+!.env.example
+
+# ==================================
+#  Artefactos de Python
+# ==================================
+# Directorios de entorno virtual
+.venv/
+venv/
+env/
+
+# Caché de Python
+__pycache__/
+*.pyc
+
+# ==================================
+#  Archivos de IDE y Editores
+# ==================================
+.vscode/
+.idea/
+
+# ==================================
+#  Archivos del Sistema Operativo
+# ==================================
+.DS_Store

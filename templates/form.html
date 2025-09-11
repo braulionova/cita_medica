@@ -2,13 +2,14 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"> <!-- Importante para móviles -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Registro de Cita Médica</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-100 flex items-center justify-center min-h-screen px-4 py-8">
 
   <div class="bg-white p-6 sm:p-8 rounded-2xl shadow-xl w-full max-w-lg">
+    <!-- ... (El resto del formulario se mantiene igual que antes) ... -->
     <h2 class="text-xl sm:text-2xl font-bold mb-6 text-center text-gray-800">Dra. Jennifer Reyes</h2>
     <h2 class="text-xl sm:text-2xl font-bold mb-6 text-center text-gray-800">Registro de Cita Médica</h2>
 
@@ -41,7 +42,7 @@
           class="w-full px-3 sm:px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm sm:text-base">
       </div>
 
-      <!-- AÑADIDO: Nombre del Seguro Médico (con opción de escribir) -->
+      <!-- Nombre del Seguro Médico -->
       <div>
         <label for="nombre_seguro_medico" class="block text-gray-700 mb-1 text-sm sm:text-base">Nombre del Seguro Médico</label>
         <input list="seguros-list" id="nombre_seguro_medico" name="nombre_seguro_medico"
@@ -55,7 +56,7 @@
         </datalist>
       </div>
 
-      <!-- ACTUALIZADO: Numero de seguro medico -->
+      <!-- Numero de seguro medico -->
       <div>
         <label for="numero_seguro_medico" class="block text-gray-700 mb-1 text-sm sm:text-base">Número de Afiliado / Póliza</label>
         <input id="numero_seguro_medico" name="numero_seguro_medico"
@@ -67,6 +68,7 @@
         <label for="fecha" class="block text-gray-700 mb-1 text-sm sm:text-base">Fecha de la cita</label>
         <input type="date" id="fecha" name="fecha" required
           class="w-full px-3 sm:px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm sm:text-base">
+        <!-- El párrafo de error anterior ya no es necesario, lo eliminamos -->
       </div>
       
       <!-- Motivo -->
@@ -89,5 +91,119 @@
       </button>
     </form>
   </div>
+
+
+  <!-- INICIO: ESTRUCTURA HTML DEL POP-UP DE ERROR -->
+  <!-- Por defecto está oculto con la clase 'hidden' -->
+  <div id="error-popup" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm text-center">
+      <!-- Icono de alerta (opcional, pero recomendado) -->
+      <svg class="mx-auto h-12 w-12 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+      </svg>
+      <h3 class="text-lg font-bold text-gray-800 mt-4">Fecha no disponible</h3>
+      <!-- El mensaje específico se insertará aquí con JavaScript -->
+      <p id="popup-message" class="text-gray-600 my-2 text-sm sm:text-base"></p>
+      <button id="close-popup-btn" class="mt-4 w-full bg-red-600 text-white py-2 px-4 rounded-lg hover:bg-red-700 transition">
+        Entendido
+      </button>
+    </div>
+  </div>
+  <!-- FIN: ESTRUCTURA HTML DEL POP-UP DE ERROR -->
+
+
+  <!-- INICIO: SCRIPT DE VALIDACIÓN ACTUALIZADO -->
+  <script>
+    // 1. Recibimos la lista de fechas Y la configuración desde Flask
+    const blockedDates = {{ fechas_bloqueadas|tojson }};
+    const config = {{ configuracion|tojson }}; // <-- NUEVO
+    
+    // ... (resto de las variables del DOM sin cambios) ...
+    const dateInput = document.getElementById('fecha');
+    const errorPopup = document.getElementById('error-popup');
+    const popupMessage = document.getElementById('popup-message');
+    const closePopupButton = document.getElementById('close-popup-btn');
+
+    // ... (funciones showPopup y hidePopup sin cambios) ...
+    function showPopup(message) { /* ... */ }
+    function hidePopup() { /* ... */ }
+
+    // 5. Escuchamos el evento de cambio en la fecha (con lógica actualizada)
+    dateInput.addEventListener('change', function() {
+      const selectedDate = this.value;
+      if (!selectedDate) return; // Si no hay fecha, no hacer nada
+
+      // Obtenemos el día de la semana (0=Domingo, 1=Lunes, ..., 6=Sábado)
+      // Ojo: new Date() puede tener problemas de timezone. Para 'YYYY-MM-DD' es seguro agregar 'T00:00:00'
+      const dateObj = new Date(selectedDate + 'T00:00:00');
+      const dayOfWeek = dateObj.getDay();
+
+      let errorMessage = '';
+
+      // --- COMPROBACIÓN DE FIN DE SEMANA ---
+      if (config.bloquear_sabados === 'true' && dayOfWeek === 6) {
+        errorMessage = 'No se agendan citas los sábados. Por favor, elija otro día.';
+      } else if (config.bloquear_domingos === 'true' && dayOfWeek === 0) {
+        errorMessage = 'No se agendan citas los domingos. Por favor, elija otro día.';
+      } 
+      // --- COMPROBACIÓN DE FECHAS BLOQUEADAS INDIVIDUALMENTE ---
+      else if (blockedDates.includes(selectedDate)) {
+        const [year, month, day] = selectedDate.split('-');
+        const formattedDate = `${day}/${month}/${year}`;
+        errorMessage = `La fecha ${formattedDate} está bloqueada. Por favor, seleccione otra.`;
+      }
+
+      if (errorMessage) {
+        showPopup(errorMessage);
+        this.value = ''; // Limpiar la selección inválida
+      }
+    });
+    
+    // 3. Función para mostrar el pop-up
+    function showPopup(message) {
+      popupMessage.textContent = message;
+      errorPopup.classList.remove('hidden'); // Muestra el pop-up
+    }
+
+    // 4. Función para ocultar el pop-up
+    function hidePopup() {
+      errorPopup.classList.add('hidden'); // Oculta el pop-up
+    }
+
+    // 5. Escuchamos el evento de cambio en la fecha
+    dateInput.addEventListener('change', function() {
+      const selectedDate = this.value;
+
+      // 6. Comprobamos si la fecha seleccionada está en nuestra lista
+      if (blockedDates.includes(selectedDate)) {
+        
+        // Formateamos la fecha para que sea más legible (DD/MM/YYYY)
+        const [year, month, day] = selectedDate.split('-');
+        const formattedDate = `${day}/${month}/${year}`;
+        
+        // Creamos el mensaje de error personalizado
+        const message = `La fecha ${formattedDate} está bloqueada. Por favor, seleccione otra.`;
+        
+        // Mostramos el pop-up con el mensaje
+        showPopup(message);
+        
+        // Borramos la fecha inválida del campo
+        this.value = '';
+      }
+    });
+
+    // 7. Añadimos los listeners para cerrar el pop-up
+    // Al hacer clic en el botón "Entendido"
+    closePopupButton.addEventListener('click', hidePopup);
+
+    // Opcional: Al hacer clic fuera del cuadro de diálogo (en el fondo oscuro)
+    errorPopup.addEventListener('click', function(event) {
+      if (event.target === errorPopup) {
+        hidePopup();
+      }
+    });
+  </script>
+  <!-- FIN: SCRIPT DE VALIDACIÓN ACTUALIZADO -->
+
 </body>
 </html>
