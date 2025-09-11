@@ -2,7 +2,7 @@ import os
 from flask import Flask, render_template, request, redirect, session, url_for, flash
 from supabase import create_client, Client
 from dotenv import load_dotenv
-from datetime import datetime # <-- AÑADIR ESTA LÍNEA
+from datetime import datetime, date  # Importamos tanto datetime como date
 
 # Cargar variables de entorno
 load_dotenv()
@@ -200,21 +200,35 @@ def logout():
     flash("👋 Sesión cerrada correctamente", "success")
     return redirect(url_for("login"))
 
-@app.route("/admin", methods=["GET", "POST"])
+@app.route("/admin")
 def admin():
     if "usuario" not in session:
         flash("⚠️ Debes iniciar sesión para acceder al panel", "error")
         return redirect(url_for("login"))
 
+    # Obtiene el parámetro 'fecha' de la URL. Puede ser una fecha, una cadena vacía, o None.
     filtro_fecha = request.args.get("fecha")
-    query = supabase.table("citas").select("*").order("fecha")
+    
+    # Prepara la consulta base
+    query = supabase.table("citas").select("*").order("fecha", desc=True)
 
-    if filtro_fecha:
+    if filtro_fecha is None:
+        # CASO 1: No hay parámetro 'fecha' en la URL (primera visita).
+        # Usamos la fecha de hoy por defecto.
+        filtro_fecha = date.today().strftime('%Y-%m-%d')
         query = query.eq("fecha", filtro_fecha)
-
+    elif filtro_fecha:
+        # CASO 2: El parámetro 'fecha' tiene un valor (no es una cadena vacía).
+        # Filtramos por esa fecha.
+        query = query.eq("fecha", filtro_fecha)
+    # CASO 3: filtro_fecha es una cadena vacía ('').
+    # No hacemos nada, por lo que la consulta base traerá todas las citas.
+    
     citas = query.execute().data
-    bloqueadas = supabase.table("fechas_bloqueadas").select("*").order("fecha").execute().data
+    
+    bloqueadas = supabase.table("fechas_bloqueadas").select("*").order("fecha", desc=True).execute().data
 
+    # Pasamos 'filtro_fecha' a la plantilla. Será la fecha de hoy, la seleccionada, o una cadena vacía.
     return render_template("admin.html", citas=citas, bloqueadas=bloqueadas, filtro_fecha=filtro_fecha)
 
 # Eliminar cita
