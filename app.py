@@ -3,6 +3,7 @@ from flask import Flask, render_template, request, redirect, session, url_for, f
 from supabase import create_client, Client
 from dotenv import load_dotenv
 from datetime import datetime, date  # Importamos tanto datetime como date
+from queue import Queue # <-- Importa la clase Queue
 
 # Cargar variables de entorno
 load_dotenv()
@@ -15,6 +16,10 @@ SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+# Crea una cola para almacenar los anuncios de pacientes.
+# Esta cola es segura para usar entre diferentes peticiones.
+announcement_queue = Queue()
 
 @app.route("/dias_llenos", methods=["GET", "POST"])
 def dias_llenos():
@@ -451,6 +456,43 @@ def desbloquear(id):
     supabase.table("fechas_bloqueadas").delete().eq("id", id).execute()
     flash("✅ Fecha desbloqueada correctamente", "success")
     return redirect(url_for("admin"))
+
+# NUEVA RUTA: La tablet se conectará aquí para escuchar eventos
+@app.route('/stream')
+def stream():
+    def event_stream():
+        while True:
+            # .get() es bloqueante: esperará hasta que haya un item en la cola
+            nombre_paciente = announcement_queue.get()
+            # Formato especial de Server-Sent Events: "data: <mensaje>\n\n"
+            yield f"data: {nombre_paciente}\n\n"
+    
+    # Devolvemos una respuesta de tipo 'text/event-stream'
+    return Response(event_stream(), mimetype='text/event-stream')
+
+# NUEVA RUTA: La página del doctor enviará el nombre del paciente aquí
+@app.route('/admin/anunciar_llamada', methods=['POST'])
+def anunciar_llamada():
+    if "usuario" not in session:
+        return jsonify({"error": "No autorizado"}), 401
+    
+    data = request.get_json()
+    nombre = data.get('nombre')
+
+    if not nombre:
+        return jsonify({"error": "Nombre del paciente no proporcionado"}), 400
+    
+    # Añadimos el nombre del paciente a la cola
+    announcement_queue.put(nombre)
+    
+    print(f"Anuncio para '{nombre}' puesto en la cola.") # Para debugging en la consola de Flask
+    return jsonify({"success": True, "message": f"Anuncio para {nombre} enviado."})
+
+# NUEVA RUTA: Para renderizar la página de la sala de espera
+@app.route('/sala_espera')
+def sala_espera():
+    # No requiere login, ya que es una pantalla pública
+    return render_template('sala_espera.html')
 
 
 if __name__ == "__main__":

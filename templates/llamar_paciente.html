@@ -1,0 +1,93 @@
+<!-- templates/llamar_paciente.html (VERSIÓN MODIFICADA) -->
+{% extends "admin_layout.html" %}
+
+{% block title %}Llamar Paciente{% endblock %}
+
+{% block content %}
+  <h1 class="text-2xl font-bold mb-6">🗣️ Llamar Paciente</h1>
+
+  <!-- SECCIÓN DE FILTRO POR FECHA (sin cambios) -->
+  <div class="bg-white shadow-md rounded-lg p-4 mb-6">
+    <h3 class="font-semibold text-lg mb-3">Seleccionar Fecha</h3>
+    <form method="GET" action="{{ url_for('llamar_paciente') }}" class="flex flex-wrap items-end gap-4">
+      <div>
+        <label for="fecha-filtro" class="block text-sm font-medium text-gray-700 mb-1">Citas del día:</label>
+        <input type="date" id="fecha-filtro" name="fecha" value="{{ filtro_fecha }}"
+               class="border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500">
+      </div>
+      <button type="submit" class="bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition">
+        Ver Pacientes
+      </button>
+    </form>
+  </div>
+
+  <!-- LISTA DE PACIENTES PARA LLAMAR -->
+  <div class="bg-white shadow-md rounded-lg p-4 overflow-x-auto">
+    <h2 class="text-xl font-semibold mb-4">
+      👥 Pacientes para el {{ filtro_fecha }}
+    </h2>
+    
+    {% if citas %}
+    <div class="space-y-3">
+      {% for cita in citas %}
+      <div class="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50">
+        <span class="font-medium text-gray-800">{{ cita.nombre }}</span>
+        <!-- El botón ahora llama a una nueva función -->
+        <button onclick="anunciarLlamada('{{ cita.nombre }}', this)" class="bg-green-500 text-white py-1 px-4 rounded-md hover:bg-green-600 transition text-sm">
+          Llamar
+        </button>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+      <p class="text-center p-4 text-gray-500">
+        No hay pacientes registrados para la fecha seleccionada.
+      </p>
+    {% endif %}
+  </div>
+
+  <!-- SCRIPT MODIFICADO: Ahora envía la solicitud al servidor -->
+  <script>
+    async function anunciarLlamada(nombre, buttonElement) {
+      // Deshabilitar botón para evitar clics múltiples y dar feedback visual
+      buttonElement.disabled = true;
+      buttonElement.textContent = 'Llamando...';
+      buttonElement.classList.add('opacity-50', 'cursor-not-allowed');
+
+      try {
+        const response = await fetch("{{ url_for('anunciar_llamada') }}", {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ nombre: nombre }),
+        });
+        
+        if (!response.ok) {
+          throw new Error('La respuesta del servidor no fue OK');
+        }
+        
+        // Cambiar el texto a "Llamado" para confirmar
+        buttonElement.textContent = 'Llamado ✓';
+        buttonElement.classList.remove('bg-green-500');
+        buttonElement.classList.add('bg-blue-500');
+        
+        // Volver al estado original después de unos segundos
+        setTimeout(() => {
+          buttonElement.disabled = false;
+          buttonElement.textContent = 'Llamar';
+          buttonElement.classList.remove('opacity-50', 'cursor-not-allowed', 'bg-blue-500');
+          buttonElement.classList.add('bg-green-500');
+        }, 3000); // 3 segundos
+
+      } catch (error) {
+        console.error('Error al anunciar la llamada:', error);
+        alert('Hubo un error al intentar llamar al paciente. Revise la consola.');
+        // Re-habilitar el botón en caso de error
+        buttonElement.disabled = false;
+        buttonElement.textContent = 'Llamar';
+        buttonElement.classList.remove('opacity-50', 'cursor-not-allowed');
+      }
+    }
+  </script>
+{% endblock %}

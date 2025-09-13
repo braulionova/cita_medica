@@ -1,0 +1,71 @@
+<!-- templates/sala_espera.html -->
+{% extends "admin_layout.html" %}
+
+{% block title %}Sala de Espera - Anuncios{% endblock %}
+
+{% block content %}
+<div class="text-center">
+  <h1 class="text-4xl font-bold mb-4">Sala de Espera</h1>
+  <p class="text-lg text-gray-600 mb-8">Esta pantalla anunciará a los pacientes llamados.</p>
+  
+  <div class="bg-white p-6 rounded-lg shadow-md max-w-md mx-auto">
+    <div class="flex items-center justify-center space-x-3 mb-4">
+      <div id="status-indicator" class="w-4 h-4 rounded-full bg-yellow-400 animate-pulse"></div>
+      <p id="status-text" class="font-semibold text-gray-700">Conectando al servidor de anuncios...</p>
+    </div>
+    <div class="mt-4 p-4 bg-gray-100 rounded">
+      <h3 class="font-bold text-lg">Último paciente llamado:</h3>
+      <p id="last-called" class="text-2xl text-blue-600 mt-2">—</p>
+    </div>
+  </div>
+</div>
+
+<script>
+  function anunciarPaciente(nombre) {
+    if ('speechSynthesis' in window) {
+      const mensaje = `${nombre}, por favor, pasar al consultorio de la doctora.`;
+      const utterance = new SpeechSynthesisUtterance(mensaje);
+      utterance.lang = 'es-MX';
+      utterance.rate = 0.9;
+      window.speechSynthesis.speak(utterance);
+    } else {
+      alert("Error: El navegador no soporta la síntesis de voz.");
+    }
+  }
+
+  // Conectarse al stream de eventos del servidor
+  const eventSource = new EventSource("{{ url_for('stream') }}");
+  const statusIndicator = document.getElementById('status-indicator');
+  const statusText = document.getElementById('status-text');
+  const lastCalled = document.getElementById('last-called');
+
+  // Evento que se dispara cuando la conexión se establece
+  eventSource.onopen = function() {
+    console.log("Conexión con el servidor establecida.");
+    statusIndicator.classList.remove('bg-yellow-400', 'bg-red-500', 'animate-pulse');
+    statusIndicator.classList.add('bg-green-500');
+    statusText.textContent = 'Conectado. Escuchando anuncios...';
+  };
+
+  // Evento que se dispara cuando llega un mensaje del servidor
+  eventSource.onmessage = function(event) {
+    const nombrePaciente = event.data;
+    console.log("Nuevo anuncio recibido:", nombrePaciente);
+    
+    // Actualizar la interfaz
+    lastCalled.textContent = nombrePaciente;
+    
+    // Reproducir el anuncio por voz
+    anunciarPaciente(nombrePaciente);
+  };
+
+  // Evento que se dispara si hay un error
+  eventSource.onerror = function(err) {
+    console.error("Error en la conexión con el servidor:", err);
+    statusIndicator.classList.remove('bg-yellow-400', 'bg-green-500');
+    statusIndicator.classList.add('bg-red-500');
+    statusIndicator.classList.add('animate-pulse');
+    statusText.textContent = 'Error de conexión. Intentando reconectar...';
+  };
+</script>
+{% endblock %}
