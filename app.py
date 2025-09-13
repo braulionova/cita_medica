@@ -3,7 +3,7 @@ from flask import Flask, render_template, request, redirect, session, url_for, f
 from supabase import create_client, Client
 from dotenv import load_dotenv
 from datetime import datetime, date  # Importamos tanto datetime como date
-from queue import Queue # <-- Importa la clase Queue
+from queue import Queue, Empty # <-- Importa la clase Queue
 
 # Cargar variables de entorno
 load_dotenv()
@@ -457,17 +457,19 @@ def desbloquear(id):
     flash("✅ Fecha desbloqueada correctamente", "success")
     return redirect(url_for("admin"))
 
-# NUEVA RUTA: La tablet se conectará aquí para escuchar eventos
 @app.route('/stream')
 def stream():
     def event_stream():
         while True:
-            # .get() es bloqueante: esperará hasta que haya un item en la cola
-            nombre_paciente = announcement_queue.get()
-            # Formato especial de Server-Sent Events: "data: <mensaje>\n\n"
-            yield f"data: {nombre_paciente}\n\n"
+            try:
+                # Intenta obtener un item de la cola, pero con un timeout de 20 segundos
+                nombre_paciente = announcement_queue.get(timeout=10)
+                yield f"data: {nombre_paciente}\n\n"
+            except Empty:
+                # Si después de 20 segundos no hay nada, envía un comentario "keep-alive"
+                # Esto no dispara el evento 'onmessage' en el cliente, es invisible para el usuario.
+                yield ": keep-alive\n\n"
     
-    # Devolvemos una respuesta de tipo 'text/event-stream'
     return Response(event_stream(), mimetype='text/event-stream')
 
 # NUEVA RUTA: La página del doctor enviará el nombre del paciente aquí
