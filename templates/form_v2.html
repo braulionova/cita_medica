@@ -9,8 +9,9 @@
 <body class="bg-gray-100 flex items-center justify-center min-h-screen px-4 py-8">
 
   <div class="bg-white p-6 sm:p-8 rounded-2xl shadow-xl w-full max-w-lg">
-    <h2 class="text-xl sm:text-2xl font-bold mb-2 text-center text-gray-800">Dra. Jennifer Reyes</h2>
-    <h3 class="text-lg sm:text-xl font-semibold mb-6 text-center text-gray-700">Registro de Cita Médica</h3>
+    <!-- ... (El resto del formulario se mantiene igual que antes) ... -->
+    <h2 class="text-xl sm:text-2xl font-bold mb-6 text-center text-gray-800">Dra. Jennifer Reyes</h2>
+    <h2 class="text-xl sm:text-2xl font-bold mb-6 text-center text-gray-800">Registro de Cita Médica</h2>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
@@ -48,10 +49,10 @@
           placeholder="Seleccione o escriba el nombre..."
           class="w-full px-3 sm:px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm sm:text-base">
         <datalist id="seguros-list">
-          <option value="Senasa"></option>
-          <option value="Humano"></option>
-          <option value="Universal"></option>
-          <option value="Otro"></option>
+          <option value="Senasa">
+          <option value="Humano">
+          <option value="Universal">
+          <option value="Otro">
         </datalist>
       </div>
 
@@ -67,6 +68,7 @@
         <label for="fecha" class="block text-gray-700 mb-1 text-sm sm:text-base">Fecha de la cita</label>
         <input type="date" id="fecha" name="fecha" required
           class="w-full px-3 sm:px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm sm:text-base">
+        <!-- El párrafo de error anterior ya no es necesario, lo eliminamos -->
       </div>
       
       <!-- Motivo -->
@@ -91,51 +93,35 @@
   </div>
 
 
-  <!-- INICIO: POP-UP DE ERROR -->
+  <!-- INICIO: ESTRUCTURA HTML DEL POP-UP DE ERROR -->
+  <!-- Por defecto está oculto con la clase 'hidden' -->
   <div id="error-popup" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
     <div class="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm text-center">
+      <!-- Icono de alerta (opcional, pero recomendado) -->
       <svg class="mx-auto h-12 w-12 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
         <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
       </svg>
       <h3 class="text-lg font-bold text-gray-800 mt-4">Fecha no disponible</h3>
+      <!-- El mensaje específico se insertará aquí con JavaScript -->
       <p id="popup-message" class="text-gray-600 my-2 text-sm sm:text-base"></p>
       <button id="close-popup-btn" class="mt-4 w-full bg-red-600 text-white py-2 px-4 rounded-lg hover:bg-red-700 transition">
         Entendido
       </button>
     </div>
   </div>
-  <!-- FIN: POP-UP DE ERROR -->
+  <!-- FIN: ESTRUCTURA HTML DEL POP-UP DE ERROR -->
 
 
-  <!-- INICIO: SCRIPT DE VALIDACIÓN CON MENSAJES ESPECÍFICOS -->
+    <!-- INICIO: SCRIPT DE VALIDACIÓN ACTUALIZADO -->
   <script>
-    // Recibimos las listas y configuración desde Flask
+    // 1. Recibimos la lista combinada de fechas bloqueadas Y DÍAS LLENOS desde Flask
     const blockedDates = {{ fechas_bloqueadas|tojson }};
-    const fullDates = {{ dias_llenos|tojson }}; 
     const config = {{ configuracion|tojson }};
-
+    
     const dateInput = document.getElementById('fecha');
     const errorPopup = document.getElementById('error-popup');
     const popupMessage = document.getElementById('popup-message');
     const closePopupButton = document.getElementById('close-popup-btn');
-    const form = document.querySelector('form');
-
-    // Establecer la fecha mínima como hoy
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const formattedToday = today.toISOString().split('T')[0];
-    dateInput.min = formattedToday;
-
-    // Función para formatear la fecha como DD/MM/YYYY
-    function formatDate(dateString) {
-        const [year, month, day] = dateString.split('-');
-        return `${day}/${month}/${year}`;
-    }
-
-    // Función para verificar si una fecha está llena
-    function isDayFull(dateString) {
-        return fullDates.includes(dateString);
-    }
 
     function showPopup(message) {
       popupMessage.textContent = message;
@@ -146,53 +132,44 @@
       errorPopup.classList.add('hidden');
     }
 
-    // Validar fecha cuando cambie
     dateInput.addEventListener('change', function() {
-  
       const selectedDate = this.value;
       if (!selectedDate) return;
 
       const dateObj = new Date(selectedDate + 'T00:00:00');
-      dateObj.setHours(0, 0, 0, 0);
       const dayOfWeek = dateObj.getDay();
+
       let errorMessage = '';
-      
-      // Validaciones en orden de prioridad
-      if (dateObj < today) {
-        errorMessage = 'No se pueden agendar citas en fechas pasadas.';
-      }
-      // Validación de fin de semana
-      else if (config.bloquear_sabados === 'true' && dayOfWeek === 6) {
+
+      // Comprobación de fin de semana
+      if (config.bloquear_sabados === 'true' && dayOfWeek === 6) {
         errorMessage = 'No se agendan citas los sábados. Por favor, elija otro día.';
-      } 
-      else if (config.bloquear_domingos === 'true' && dayOfWeek === 0) {
+      } else if (config.bloquear_domingos === 'true' && dayOfWeek === 0) {
         errorMessage = 'No se agendan citas los domingos. Por favor, elija otro día.';
       } 
-      // Validación de días llenos
-      else if (isDayFull(selectedDate)) {
-        errorMessage = `Lo sentimos, el día ${formatDate(selectedDate)} ha alcanzado el límite de citas disponibles. Por favor, seleccione otra fecha.`;
-      }
-      // Validación de fechas bloqueadas manualmente
+      // Comprobación de fechas bloqueadas o llenas
       else if (blockedDates.includes(selectedDate)) {
-        errorMessage = `La fecha ${formatDate(selectedDate)} no está disponible para citas. Por favor, seleccione otra fecha.`;
+        const [year, month, day] = selectedDate.split('-');
+        const formattedDate = `${day}/${month}/${year}`;
+        // Mensaje genérico que cubre ambos casos (bloqueado o lleno)
+        errorMessage = `La fecha ${formattedDate} no está disponible. Por favor, seleccione otra.`;
       }
 
-      // Si se encontró algún error, mostrar el pop-up y limpiar el campo
       if (errorMessage) {
         showPopup(errorMessage);
         this.value = ''; // Limpiar la selección inválida
       }
     });
 
-    // Listeners para cerrar el pop-up (sin cambios)
     closePopupButton.addEventListener('click', hidePopup);
+
     errorPopup.addEventListener('click', function(event) {
-      if (event.target === event.currentTarget) {
+      if (event.target === errorPopup) {
         hidePopup();
       }
     });
   </script>
-  <!-- FIN: SCRIPT DE VALIDACIÓN -->
+  <!-- FIN: SCRIPT DE VALIDACIÓN ACTUALIZADO -->
 
 </body>
 </html>

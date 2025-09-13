@@ -16,104 +16,22 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-@app.route("/dias_llenos", methods=["GET", "POST"])
-def dias_llenos():
-    """
-    Devuelve la cantidad de citas agrupadas por fecha,
-    filtrando solo desde la fecha actual en adelante.
-    
-    Returns:
-        list: [{"fecha": "YYYY-MM-DD", "cantidad": int}, ...]
-    """
-    hoy = date.today().isoformat()  # Fecha actual en formato YYYY-MM-DD
-    
-    # Traemos todas las citas con fecha >= hoy
-    response = supabase.table("citas").select("fecha").gte("fecha", hoy).execute()
-    citas = response.data
-    
-    # Contamos por fecha
-    conteo = {}
-    for cita in citas:
-        fecha = cita["fecha"]
-        conteo[fecha] = conteo.get(fecha, 0) + 1
-    
-    # Convertimos a lista ordenada por fecha
-    resultado = [{"fecha": f, "cantidad": c} for f, c in sorted(conteo.items())]
-    
-    return resultado
-
-# --- FUNCIÓN AUXILIAR PARA OBTENER CONFIGURACIÓN (ACTUALIZADA) ---
+# --- FUNCIÓN AUXILIAR PARA OBTENER CONFIGURACIÓN ---
 def get_configuracion():
-    """Obtiene la configuración de la BD y la devuelve como un diccionario con valores por defecto."""
+    """Obtiene la configuración de la BD y la devuelve como un diccionario."""
     try:
         config_data = supabase.table("configuracion").select("clave, valor").execute().data
+        # Convierte la lista de objetos en un diccionario para fácil acceso
         config = {item['clave']: item['valor'] for item in config_data}
+        # Asegurarse de que las claves siempre existan
+        config.setdefault('bloquear_sabados', 'false')
+        config.setdefault('bloquear_domingos', 'false')
+        return config
     except Exception as e:
         print(f"Error obteniendo configuración: {e}")
-        config = {}
+        return {'bloquear_sabados': 'false', 'bloquear_domingos': 'false'}
     
-    # Asegurarse de que las claves siempre existan
-    config.setdefault('bloquear_sabados', 'false')
-    config.setdefault('bloquear_domingos', 'false')
-    # NUEVO: Valores por defecto para límites de pacientes (un número alto significa sin límite)
-    dias = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado']
-    for dia in dias:
-        config.setdefault(f'max_pacientes_{dia}', '999') # 999 como "infinito"
-    return config
-
-# --- FUNCIÓN MEJORADA PARA OBTENER DÍAS LLENOS ---
-def get_dias_llenos():
-    """
-    Consulta las citas, las agrupa por fecha y devuelve una lista de fechas
-    que han alcanzado su límite de pacientes según la configuración.
-    Solo considera fechas futuras.
-    """
-    config = get_configuracion()
-    dias_llenos = []
-    
-    # Mapeo de weekday() a claves de configuración (Lunes=0, Domingo=6)
-    mapa_dias = {
-        0: 'lunes', 1: 'martes', 2: 'miercoles',
-        3: 'jueves', 4: 'viernes', 5: 'sabado'
-    }
-
-    try:
-        # Traemos todas las citas con fecha
-        response = supabase.table("citas").select("fecha").execute()
-        citas = response.data
-        
-        # Contamos por fecha manualmente en Python
-        conteo = {}
-        for cita in citas:
-            fecha = cita["fecha"]
-            conteo[fecha] = conteo.get(fecha, 0) + 1
-        
-        # Convertimos a lista ordenada por fecha
-        citas_por_dia = [{"fecha": f, "cantidad": c} for f, c in sorted(conteo.items())]
-        
-        for item in citas_por_dia:
-            fecha_str = item['fecha']
-            cantidad = item['cantidad']
-            
-            fecha_obj = datetime.strptime(fecha_str, '%Y-%m-%d').date()
-            dia_semana = fecha_obj.weekday() # Lunes=0, Martes=1, ...
-            
-            if dia_semana in mapa_dias:
-                nombre_dia = mapa_dias[dia_semana]
-                try:
-                    limite = int(config.get(f'max_pacientes_{nombre_dia}', 999))
-                    # Si el cantidad alcanza o supera el límite, agregar a días llenos
-                    if cantidad >= limite:
-                        dias_llenos.append(fecha_str)
-                except (ValueError, TypeError):
-                    print(f"Error: El límite para {nombre_dia} no es un número válido")
-
-    except Exception as e:
-        print(f"Error calculando días llenos: {e}")
-
-    return dias_llenos
-    
-# --- RUTA PARA LA CONFIGURACIÓN (ACTUALIZADA) ---
+# --- NUEVA RUTA PARA LA CONFIGURACIÓN ---
 @app.route("/admin/configuracion", methods=["GET", "POST"])
 def configuracion():
     if "usuario" not in session:
@@ -121,24 +39,16 @@ def configuracion():
         return redirect(url_for("login"))
         
     if request.method == "POST":
-        # Bloqueo de fines de semana
+        # Los checkboxes no enviados no aparecen en form, por eso chequeamos su existencia
         sabados_bloqueados = 'true' if 'bloquear_sabados' in request.form else 'false'
         domingos_bloqueados = 'true' if 'bloquear_domingos' in request.form else 'false'
         
-        # NUEVO: Límites de pacientes
-        dias = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado']
-        config_updates = [
-            {'clave': 'bloquear_sabados', 'valor': sabados_bloqueados},
-            {'clave': 'bloquear_domingos', 'valor': domingos_bloqueados}
-        ]
-        for dia in dias:
-            limite = request.form.get(f'max_pacientes_{dia}')
-            # Si el campo está vacío, lo guardamos como un número alto (sin límite)
-            valor_a_guardar = limite if limite else '999'
-            config_updates.append({'clave': f'max_pacientes_{dia}', 'valor': valor_a_guardar})
-
         try:
-            supabase.table('configuracion').upsert(config_updates, on_conflict='clave').execute()
+            # Upsert actualiza si la clave existe, o inserta si no. Perfecto para esto.
+            supabase.table('configuracion').upsert([
+                {'clave': 'bloquear_sabados', 'valor': sabados_bloqueados},
+                {'clave': 'bloquear_domingos', 'valor': domingos_bloqueados}
+            ], on_conflict='clave').execute()
             flash("✅ Configuración guardada correctamente.", "success")
         except Exception as e:
             flash(f"❌ Error al guardar la configuración: {e}", "error")
@@ -153,41 +63,6 @@ def configuracion():
 
 @app.route("/", methods=["GET", "POST"])
 def registrar_cita():
-    config = get_configuracion()
-    
-    # --- OBTENER FECHAS NO DISPONIBLES (BLOQUEADAS + LLENAS) ---
-    try:
-        fechas_bloqueadas_data = supabase.table("fechas_bloqueadas").select("fecha").execute().data
-        fechas_bloqueadas_manualmente = {f["fecha"] for f in fechas_bloqueadas_data}
-    except Exception as e:
-        # ... (código de manejo de error)
-        fechas_bloqueadas_manualmente = set()
-
-    dias_llenos = set(get_dias_llenos())
-    # Combinamos ambas listas para pasarlas al frontend
-    fechas_no_disponibles = list(fechas_bloqueadas_manualmente.union(dias_llenos))
-
-    if request.method == "POST":
-        fecha_str = request.form["fecha"]
-        fecha_obj = datetime.strptime(fecha_str, '%Y-%m-%d').date()
-
-        # VALIDACIÓN 1: Fin de semana
-        if config.get('bloquear_sabados') == 'true' and fecha_obj.weekday() == 5:
-            flash("❌ No se pueden agendar citas los sábados.", "error")
-            return redirect(url_for("registrar_cita"))
-        if config.get('bloquear_domingos') == 'true' and fecha_obj.weekday() == 6:
-            flash("❌ No se pueden agendar citas los domingos.", "error")
-            return redirect(url_for("registrar_cita"))
-            
-        # VALIDACIÓN 2: Fecha bloqueada manualmente
-        if fecha_str in fechas_bloqueadas_manualmente:
-            flash("❌ La fecha seleccionada no está disponible. Por favor, elija otra.", "error")
-            return redirect(url_for("registrar_cita"))
-
-        # VALIDACIÓN 3: Límite de pacientes por día
-        if fecha_str in dias_llenos:
-             flash("❌ El cupo para la fecha seleccionada está lleno. Por favor, elija otra.", "error")
-             return redirect(url_for("registrar_cita"))
     # Traer fechas bloqueadas
     try:
         fechas_bloqueadas_data = supabase.table("fechas_bloqueadas").select("fecha").execute().data
@@ -262,8 +137,7 @@ def registrar_cita():
     
     # Si es GET, renderiza la plantilla y pasa la lista de fechas y la configuración
     config = get_configuracion()
-    dias_llenos = get_dias_llenos()  # Obtiene los días que están llenos usando la función existente
-    return render_template("form.html", fechas_bloqueadas=fechas_bloqueadas, dias_llenos=dias_llenos, configuracion=config)
+    return render_template("form.html", fechas_bloqueadas=fechas_bloqueadas, configuracion=config)
 
 # 👇 Formulario para bloquear fechas (VERSIÓN CORREGIDA)
 @app.route("/bloquear", methods=["GET", "POST"])
@@ -370,29 +244,14 @@ def mover_cita(id):
     if "usuario" not in session:
         flash("⚠️ Debes iniciar sesión para acceder", "error")
         return redirect(url_for("login"))
-    
-    
         
     config = get_configuracion() # <-- Obtener configuración
     fechas_bloqueadas_data = supabase.table("fechas_bloqueadas").select("fecha").execute().data
     fechas_bloqueadas = [f["fecha"] for f in fechas_bloqueadas_data]
 
-    try:
-        fechas_bloqueadas_data = supabase.table("fechas_bloqueadas").select("fecha").execute().data
-        fechas_bloqueadas_manualmente = {f["fecha"] for f in fechas_bloqueadas_data}
-    except:
-        fechas_bloqueadas_manualmente = set()
-
-    dias_llenos = set(get_dias_llenos())
-    fechas_no_disponibles = list(fechas_bloqueadas_manualmente.union(dias_llenos))
-
     if request.method == "POST":
         nueva_fecha_str = request.form["nueva_fecha"]
         nueva_fecha_obj = datetime.strptime(nueva_fecha_str, '%Y-%m-%d')
-
-        if nueva_fecha in fechas_no_disponibles:
-            flash(f"❌ No se puede mover la cita al {nueva_fecha} porque la fecha está llena o bloqueada.", "error")
-            return redirect(url_for("mover_cita", id=id))
 
         # --- VALIDACIÓN DE FINES DE SEMANA (también aquí) ---
         if config.get('bloquear_sabados') == 'true' and nueva_fecha_obj.weekday() == 5:
