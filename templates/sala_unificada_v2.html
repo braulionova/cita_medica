@@ -1,11 +1,13 @@
-<!-- templates/sala_unificada.html (VERSIÓN FINAL Y ROBUSTA) -->
+<!-- templates/sala_unificada.html (VERSIÓN MEJORADA Y ROBUSTA) -->
 {% extends "admin_layout.html" %}
 
 {% block title %}Sala de Llamadas{% endblock %}
 
 {% block content %}
 
-<!-- PANTALLA DE INICIO PARA ACTIVAR AUDIO -->
+<!-- ====================================================== -->
+<!--    PANTALLA DE INICIO PARA ACTIVAR AUDIO (TABLET)      -->
+<!-- ====================================================== -->
 <div id="pantalla-inicio" class="text-center">
   <h1 class="text-3xl font-bold mb-4">Sistema de Anuncios</h1>
   <p class="text-lg text-gray-600 mb-8">Presione el botón para activar la sala de espera.</p>
@@ -14,18 +16,26 @@
   </button>
 </div>
 
-<!-- CONTENIDO PRINCIPAL (Inicialmente oculto) -->
+
+<!-- ====================================================== -->
+<!--    CONTENIDO PRINCIPAL (Inicialmente oculto)           -->
+<!-- ====================================================== -->
 <div id="contenido-principal" class="hidden">
+
+  <!-- Título principal, visible para todos -->
   <h1 class="text-3xl font-bold mb-6">🗣️ Sala de Llamadas y Anuncios</h1>
+
+  <!-- SECCIÓN VISIBLE SÓLO PARA LA DOCTORA -->
   {% if es_doctor %}
   <div id="panel-doctora" class="mb-8">
-    <!-- ... (El panel de la doctora no cambia, se queda igual) ... -->
+    <!-- ... (El panel de la doctora no cambia) ... -->
     <div class="bg-white shadow-md rounded-lg p-4 mb-6">
       <h3 class="font-semibold text-lg mb-3">Filtrar Pacientes por Fecha</h3>
       <form method="GET" action="{{ url_for('sala_unificada') }}" class="flex flex-wrap items-end gap-4">
         <div>
           <label for="fecha-filtro" class="block text-sm font-medium text-gray-700 mb-1">Citas del día:</label>
-          <input type="date" id="fecha-filtro" name="fecha" value="{{ filtro_fecha }}" class="border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500">
+          <input type="date" id="fecha-filtro" name="fecha" value="{{ filtro_fecha }}"
+                 class="border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500">
         </div>
         <button type="submit" class="bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition">
           Ver Pacientes
@@ -35,24 +45,24 @@
     <div class="bg-white shadow-md rounded-lg p-4">
       <h2 class="text-xl font-semibold mb-4">👥 Pacientes para el {{ filtro_fecha }}</h2>
       {% if citas %}
-      <div class="space-y-3">
-        {% for cita in citas %}
-        <div class="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50">
-          <span class="font-medium text-gray-800">{{ cita.nombre }}</span>
-          <button onclick="anunciarLlamada('{{ cita.nombre }}', this)" class="bg-green-500 text-white py-1 px-4 rounded-md hover:bg-green-600 transition text-sm">
-            Llamar
-          </button>
+        <div class="space-y-3">
+          {% for cita in citas %}
+          <div class="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50">
+            <span class="font-medium text-gray-800">{{ cita.nombre }}</span>
+            <button onclick="anunciarLlamada('{{ cita.nombre }}', this)" class="bg-green-500 text-white py-1 px-4 rounded-md hover:bg-green-600 transition text-sm">
+              Llamar
+            </button>
+          </div>
+          {% endfor %}
         </div>
-        {% endfor %}
-      </div>
       {% else %}
-      <p class="text-center p-4 text-gray-500">No hay pacientes registrados para la fecha seleccionada.</p>
+        <p class="text-center p-4 text-gray-500">No hay pacientes registrados para la fecha seleccionada.</p>
       {% endif %}
     </div>
   </div>
   {% endif %}
 
-  <!-- SECCIÓN DE ANUNCIOS -->
+  <!-- SECCIÓN DE ANUNCIOS (Visible para todos una vez activada) -->
   <div id="panel-anuncios" class="bg-white p-6 rounded-lg shadow-md max-w-md mx-auto text-center">
     <div class="flex items-center justify-center space-x-3 mb-4">
       <div id="status-indicator" class="w-4 h-4 rounded-full bg-yellow-400 animate-pulse"></div>
@@ -63,44 +73,43 @@
       <p id="last-called" class="text-2xl text-blue-600 mt-2">—</p>
     </div>
   </div>
+
 </div>
 
+
+<!-- ====================================================== -->
+<!--            SCRIPTS CON LÓGICA MEJORADA                 -->
+<!-- ====================================================== -->
 <script>
+  // --- FUNCIÓN PARA HABLAR (MEJORADA PARA SER MÁS ROBUSTA) ---
   function anunciarPaciente(nombre) {
     if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(nombre + ", por favor, pasar al consultorio de la doctora.");
+      // CANCELA cualquier anuncio anterior que no haya terminado.
+      // Esto evita que los llamados se "encolen" o se corten.
+      window.speechSynthesis.cancel(); 
+
+      const mensaje = `${nombre}, por favor, pasar al consultorio de la doctora.`;
+      const utterance = new SpeechSynthesisUtterance(mensaje);
       utterance.lang = 'es-MX';
       utterance.rate = 0.9;
       window.speechSynthesis.speak(utterance);
+    } else {
+      alert("Error: El navegador no soporta la síntesis de voz.");
     }
   }
 
+  // --- LÓGICA PARA INICIAR LA CONEXIÓN ---
   const btnActivar = document.getElementById('btn-activar');
   const pantallaInicio = document.getElementById('pantalla-inicio');
   const contenidoPrincipal = document.getElementById('contenido-principal');
-  const esDoctor = {{ es_doctor|tojson }};
+  const esDoctor = {{ es_doctor|tojson }}; // Pasa la variable de Flask a JS
 
   function iniciarSistema() {
+    // Oculta la pantalla de inicio y muestra el contenido principal
     pantallaInicio.style.display = 'none';
     contenidoPrincipal.classList.remove('hidden');
 
-    // =========================================================================
-    //  👇 INICIO DEL CAMBIO IMPORTANTE: "CALENTAR" EL MOTOR DE VOZ 👇
-    // =========================================================================
-    if ('speechSynthesis' in window) {
-      // Creamos una frase de bienvenida para forzar la inicialización del motor.
-      // Esto es crucial para que el primer llamado real funcione.
-      const warmUpUtterance = new SpeechSynthesisUtterance("Sistema de anuncios activado.");
-      warmUpUtterance.volume = 0.1; // Ponemos un volumen bajo para que no sea molesto
-      warmUpUtterance.lang = 'es-MX';
-      window.speechSynthesis.speak(warmUpUtterance);
-    }
-    // =========================================================================
-    //  👆 FIN DEL CAMBIO IMPORTANTE 👆
-    // =========================================================================
-
-    // Ahora, conectamos al servidor. El motor de voz ya estará listo.
+    // CONECTARSE AL SERVIDOR SÓLO DESPUÉS DE LA INTERACCIÓN
     const eventSource = new EventSource("{{ url_for('stream') }}");
     const statusIndicator = document.getElementById('status-indicator');
     const statusText = document.getElementById('status-text');
@@ -125,14 +134,16 @@
     };
   }
 
+  // Si es la doctora, no necesita la pantalla de inicio, se activa automáticamente.
   if (esDoctor) {
     iniciarSistema();
   } else {
+    // Si es la tablet, espera el clic en el botón.
     btnActivar.addEventListener('click', iniciarSistema);
   }
 
+  // --- FUNCIÓN PARA ENVIAR LA ORDEN DE LLAMADA (Sin cambios) ---
   async function anunciarLlamada(nombre, buttonElement) {
-    // ... (Esta función no necesita cambios) ...
     buttonElement.disabled = true;
     buttonElement.textContent = 'Llamando...';
     buttonElement.classList.add('opacity-50', 'cursor-not-allowed');
