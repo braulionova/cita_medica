@@ -1,5 +1,5 @@
 import os
-from flask import Flask, render_template, request, redirect, session, url_for, flash
+from flask import Flask, render_template, request, redirect, session, url_for, flash, Response, jsonify
 from supabase import create_client, Client
 from dotenv import load_dotenv
 from datetime import datetime, date  # Importamos tanto datetime como date
@@ -493,6 +493,33 @@ def anunciar_llamada():
 def sala_espera():
     # No requiere login, ya que es una pantalla pública
     return render_template('sala_espera.html')
+
+@app.route("/admin/llamar")
+def llamar_paciente():
+    if "usuario" not in session:
+        flash("⚠️ Debes iniciar sesión para acceder", "error")
+        return redirect(url_for("login"))
+
+    # Obtener la fecha del filtro. Si no hay, usar la de hoy por defecto.
+    filtro_fecha = request.args.get("fecha")
+    if not filtro_fecha:
+        filtro_fecha = date.today().strftime('%Y-%m-%d')
+    
+    citas = []
+    try:
+        # Consultar solo los campos necesarios (nombre) para la fecha filtrada
+        # Ordenamos por nombre para tener una lista alfabética
+        response = supabase.table("citas").select("id, nombre") \
+                                          .eq("fecha", filtro_fecha) \
+                                          .order("nombre", desc=False) \
+                                          .execute()
+        citas = response.data
+    except Exception as e:
+        flash(f"❌ Error al cargar la lista de pacientes: {e}", "error")
+        print(f"Error cargando pacientes: {e}")
+
+    # Esta línea renderiza el formulario que crearemos en el siguiente paso
+    return render_template("llamar_paciente.html", citas=citas, filtro_fecha=filtro_fecha)
 
 
 if __name__ == "__main__":
