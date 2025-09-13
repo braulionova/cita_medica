@@ -20,11 +20,8 @@
             <!-- La clase 'bg-gray-700' se podría añadir dinámicamente para la página activa -->
             <a href="{{ url_for('admin') }}" class="block p-2 rounded hover:bg-gray-700 transition">📋 Panel Principal</a>
           </li>
-           <li class="mb-2">
-            <a href="{{ url_for('llamar_paciente') }}" class="block p-2 rounded hover:bg-gray-700 transition">🗣️ Llamar Paciente</a>
-          </li>
           <li class="mb-2">
-            <a href="{{ url_for('sala_espera') }}" class="block p-2 rounded hover:bg-gray-700 transition" target="_blank">📺 Ver Sala de Espera</a>
+            <a href="{{ url_for('sala_unificada') }}" class="block p-2 rounded hover:bg-gray-700 transition">🗣️ Sala de Llamadas</a>
           </li>
           <li class="mb-2">
             <a href="{{ url_for('bloquear_fecha') }}" class="block p-2 rounded hover:bg-gray-700 transition">🚫 Bloquear Fecha</a>

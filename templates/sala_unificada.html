@@ -1,0 +1,144 @@
+<!-- templates/sala_unificada.html -->
+{% extends "admin_layout.html" %}
+
+{% block title %}Sala de Llamadas{% endblock %}
+
+{% block content %}
+  <!-- Título principal, visible para todos -->
+  <h1 class="text-3xl font-bold mb-6">🗣️ Sala de Llamadas y Anuncios</h1>
+
+  <!-- ====================================================== -->
+  <!--    SECCIÓN VISIBLE SÓLO PARA LA DOCTORA (LOGUEADA)     -->
+  <!-- ====================================================== -->
+  {% if es_doctor %}
+  <div id="panel-doctora" class="mb-8">
+    <!-- SECCIÓN DE FILTRO POR FECHA -->
+    <div class="bg-white shadow-md rounded-lg p-4 mb-6">
+      <h3 class="font-semibold text-lg mb-3">Filtrar Pacientes por Fecha</h3>
+      <form method="GET" action="{{ url_for('sala_unificada') }}" class="flex flex-wrap items-end gap-4">
+        <div>
+          <label for="fecha-filtro" class="block text-sm font-medium text-gray-700 mb-1">Citas del día:</label>
+          <input type="date" id="fecha-filtro" name="fecha" value="{{ filtro_fecha }}"
+                 class="border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500">
+        </div>
+        <button type="submit" class="bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition">
+          Ver Pacientes
+        </button>
+      </form>
+    </div>
+
+    <!-- LISTA DE PACIENTES PARA LLAMAR -->
+    <div class="bg-white shadow-md rounded-lg p-4">
+      <h2 class="text-xl font-semibold mb-4">👥 Pacientes para el {{ filtro_fecha }}</h2>
+      {% if citas %}
+        <div class="space-y-3">
+          {% for cita in citas %}
+          <div class="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50">
+            <span class="font-medium text-gray-800">{{ cita.nombre }}</span>
+            <button onclick="anunciarLlamada('{{ cita.nombre }}', this)" class="bg-green-500 text-white py-1 px-4 rounded-md hover:bg-green-600 transition text-sm">
+              Llamar
+            </button>
+          </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="text-center p-4 text-gray-500">No hay pacientes registrados para la fecha seleccionada.</p>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+  <!-- ====================================================== -->
+  <!--      FIN DE LA SECCIÓN SÓLO PARA LA DOCTORA            -->
+  <!-- ====================================================== -->
+
+  <!-- ====================================================== -->
+  <!--       SECCIÓN VISIBLE PARA TODOS (TABLET Y DOCTORA)    -->
+  <!-- ====================================================== -->
+  <div id="panel-anuncios" class="bg-white p-6 rounded-lg shadow-md max-w-md mx-auto text-center">
+    <div class="flex items-center justify-center space-x-3 mb-4">
+      <div id="status-indicator" class="w-4 h-4 rounded-full bg-yellow-400 animate-pulse"></div>
+      <p id="status-text" class="font-semibold text-gray-700">Conectando al servidor de anuncios...</p>
+    </div>
+    <div class="mt-4 p-4 bg-gray-100 rounded">
+      <h3 class="font-bold text-lg">Último paciente llamado:</h3>
+      <p id="last-called" class="text-2xl text-blue-600 mt-2">—</p>
+    </div>
+  </div>
+
+
+  <!-- ====================================================== -->
+  <!--            SCRIPTS PARA AMBAS VISTAS                   -->
+  <!-- ====================================================== -->
+  <script>
+    // --- FUNCIÓN PARA HABLAR (Necesaria en ambas vistas) ---
+    function anunciarPaciente(nombre) {
+      if ('speechSynthesis' in window) {
+        const mensaje = `${nombre}, por favor, pasar al consultorio de la doctora.`;
+        const utterance = new SpeechSynthesisUtterance(mensaje);
+        utterance.lang = 'es-MX';
+        utterance.rate = 0.9;
+        window.speechSynthesis.speak(utterance);
+      } else {
+        alert("Error: El navegador no soporta la síntesis de voz.");
+      }
+    }
+
+    // --- CÓDIGO PARA ESCUCHAR ANUNCIOS (Necesario en ambas vistas) ---
+    const eventSource = new EventSource("{{ url_for('stream') }}");
+    const statusIndicator = document.getElementById('status-indicator');
+    const statusText = document.getElementById('status-text');
+    const lastCalled = document.getElementById('last-called');
+
+    eventSource.onopen = function() {
+      statusIndicator.classList.remove('bg-yellow-400', 'bg-red-500', 'animate-pulse');
+      statusIndicator.classList.add('bg-green-500');
+      statusText.textContent = 'Conectado. Escuchando anuncios...';
+    };
+
+    eventSource.onmessage = function(event) {
+      const nombrePaciente = event.data;
+      lastCalled.textContent = nombrePaciente;
+      anunciarPaciente(nombrePaciente);
+    };
+
+    eventSource.onerror = function(err) {
+      statusIndicator.classList.remove('bg-yellow-400', 'bg-green-500');
+      statusIndicator.classList.add('bg-red-500', 'animate-pulse');
+      statusText.textContent = 'Error de conexión. Intentando reconectar...';
+    };
+
+    // --- FUNCIÓN PARA ENVIAR LA ORDEN DE LLAMADA (Solo necesaria para la doctora, pero no daña tenerla siempre) ---
+    async function anunciarLlamada(nombre, buttonElement) {
+      buttonElement.disabled = true;
+      buttonElement.textContent = 'Llamando...';
+      buttonElement.classList.add('opacity-50', 'cursor-not-allowed');
+
+      try {
+        const response = await fetch("{{ url_for('anunciar_llamada') }}", {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ nombre: nombre }),
+        });
+        
+        if (!response.ok) throw new Error('Error del servidor');
+        
+        buttonElement.textContent = 'Llamado ✓';
+        buttonElement.classList.remove('bg-green-500');
+        buttonElement.classList.add('bg-blue-500');
+        
+        setTimeout(() => {
+          buttonElement.disabled = false;
+          buttonElement.textContent = 'Llamar';
+          buttonElement.classList.remove('opacity-50', 'cursor-not-allowed', 'bg-blue-500');
+          buttonElement.classList.add('bg-green-500');
+        }, 3000);
+
+      } catch (error) {
+        alert('Hubo un error al intentar llamar al paciente.');
+        buttonElement.disabled = false;
+        buttonElement.textContent = 'Llamar';
+        buttonElement.classList.remove('opacity-50', 'cursor-not-allowed');
+      }
+    }
+  </script>
+{% endblock %}

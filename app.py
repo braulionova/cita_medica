@@ -521,6 +521,36 @@ def llamar_paciente():
     # Esta línea renderiza el formulario que crearemos en el siguiente paso
     return render_template("llamar_paciente.html", citas=citas, filtro_fecha=filtro_fecha)
 
+# 👇 NUEVA RUTA UNIFICADA QUE REEMPLAZA A LAS DOS ANTERIORES 👇
+@app.route("/sala")
+def sala_unificada():
+    # Determinamos si el usuario es la doctora (si ha iniciado sesión)
+    es_doctor = "usuario" in session
+
+    # Por defecto, la fecha es hoy.
+    filtro_fecha = request.args.get("fecha", date.today().strftime('%Y-%m-%d'))
+    
+    citas = []
+    # Solo buscamos la lista de pacientes si es la doctora quien visita la página
+    if es_doctor:
+        try:
+            response = supabase.table("citas").select("id, nombre") \
+                                              .eq("fecha", filtro_fecha) \
+                                              .order("nombre", desc=False) \
+                                              .execute()
+            citas = response.data
+        except Exception as e:
+            flash(f"❌ Error al cargar la lista de pacientes: {e}", "error")
+            print(f"Error cargando pacientes: {e}")
+
+    # Renderizamos la nueva plantilla unificada, pasándole toda la información
+    return render_template(
+        "sala_unificada.html", 
+        citas=citas, 
+        filtro_fecha=filtro_fecha, 
+        es_doctor=es_doctor
+    )
+
 
 if __name__ == "__main__":
     app.run(debug=True)
