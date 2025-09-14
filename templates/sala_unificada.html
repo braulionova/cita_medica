@@ -1,10 +1,9 @@
-<!-- templates/sala_unificada.html (VERSIÓN FINAL CON CHECKBOX) -->
-{% extends "admin_layout.html" %}
+<!-- templates/sala_unificada.html (VERSIÓN CON BOTÓN RE-LLAMAR) -->
+{% extends "sala_layout.html" %}
 
 {% block title %}Sala de Llamadas{% endblock %}
 
 {% block content %}
-
 <!-- PANTALLA DE INICIO (sin cambios) -->
 <div id="pantalla-inicio" class="text-center">
   <h1 class="text-3xl font-bold mb-4">Sistema de Anuncios</h1>
@@ -32,48 +31,51 @@
         </button>
       </form>
     </div>
-    <!-- 👇 INICIO DE CAMBIOS EN LA LISTA DE PACIENTES 👇 -->
+    <!-- Lista de pacientes -->
     <div class="bg-white shadow-md rounded-lg p-4">
       <h2 class="text-xl font-semibold mb-4">👥 Pacientes para el {{ filtro_fecha }}</h2>
-      {% if citas %}
       <div class="space-y-3">
         {% for cita in citas %}
         <div class="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50">
-          <!-- Contenedor para el checkbox y el nombre -->
           <div class="flex items-center gap-3">
             <input type="checkbox" id="llamado-{{ cita.id }}" class="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500" disabled {% if cita.fue_llamado %}checked{% endif %}>
             <span class="font-medium text-gray-800">{{ cita.nombre }}</span>
           </div>
-          <!-- El botón ahora pasa el ID de la cita a la función JS -->
-          <button onclick="anunciarLlamada('{{ cita.id }}', '{{ cita.nombre }}', this)" class="bg-green-500 text-white py-1 px-4 rounded-md hover:bg-green-600 transition text-sm">
-            Llamar
-          </button>
+
+          <!-- AVISO: CAMBIO 1 DE 2 - El botón ahora tiene un estado inicial diferente si ya fue llamado -->
+          {% if cita.fue_llamado %}
+            <button onclick="anunciarLlamada('{{ cita.id }}', '{{ cita.nombre }}', this)" class="bg-gray-500 text-white py-1 px-4 rounded-md hover:bg-gray-600 transition text-sm">
+              Llamar de Nuevo
+            </button>
+          {% else %}
+            <button onclick="anunciarLlamada('{{ cita.id }}', '{{ cita.nombre }}', this)" class="bg-green-500 text-white py-1 px-4 rounded-md hover:bg-green-600 transition text-sm">
+              Llamar
+            </button>
+          {% endif %}
         </div>
         {% endfor %}
       </div>
-      {% else %}
-      <p class="text-center p-4 text-gray-500">No hay pacientes registrados para la fecha seleccionada.</p>
-      {% endif %}
     </div>
-     <!-- 👆 FIN DE CAMBIOS EN LA LISTA DE PACIENTES 👆 -->
   </div>
   {% endif %}
-
-  <!-- SECCIÓN DE ANUNCIOS (sin cambios) -->
+  <!-- Panel de anuncios (sin cambios) -->
   <div id="panel-anuncios" class="bg-white p-6 rounded-lg shadow-md max-w-md mx-auto text-center">
-    <div class="flex items-center justify-center space-x-3 mb-4">
-      <div id="status-indicator" class="w-4 h-4 rounded-full bg-yellow-400 animate-pulse"></div>
-      <p id="status-text" class="font-semibold text-gray-700">Conectando al servidor de anuncios...</p>
-    </div>
-    <div class="mt-4 p-4 bg-gray-100 rounded">
-      <h3 class="font-bold text-lg">Último paciente llamado:</h3>
-      <p id="last-called" class="text-2xl text-blue-600 mt-2">—</p>
-    </div>
+      <div id="status-indicator" class="w-4 h-4 rounded-full bg-yellow-400 animate-pulse inline-block"></div>
+      <p id="status-text" class="inline-block ml-2 font-semibold text-gray-700">Conectando al servidor...</p>
+      <div class="mt-4 p-4 bg-gray-100 rounded">
+          <h3 class="font-bold text-lg">Último paciente llamado:</h3>
+          <p id="last-called" class="text-2xl text-blue-600 mt-2">—</p>
+      </div>
   </div>
 </div>
 
 <script>
-  // ... (función anunciarPaciente y lógica de inicio sin cambios) ...
+  // ... (toda la lógica de activación y conexión `iniciarSistema` se queda exactamente igual) ...
+  const btnActivar = document.getElementById('btn-activar');
+  const pantallaInicio = document.getElementById('pantalla-inicio');
+  const contenidoPrincipal = document.getElementById('contenido-principal');
+  const esDoctor = {{ es_doctor|tojson }};
+
   function anunciarPaciente(nombre) {
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
@@ -84,15 +86,10 @@
     }
   }
 
-  const btnActivar = document.getElementById('btn-activar');
-  const pantallaInicio = document.getElementById('pantalla-inicio');
-  const contenidoPrincipal = document.getElementById('contenido-principal');
-  const esDoctor = {{ es_doctor|tojson }};
-
   function iniciarSistema() {
     pantallaInicio.style.display = 'none';
     contenidoPrincipal.classList.remove('hidden');
-    if ('speechSynthesis' in window) {
+    if (!esDoctor && 'speechSynthesis' in window) {
       const warmUpUtterance = new SpeechSynthesisUtterance("Sistema de anuncios activado.");
       warmUpUtterance.volume = 0.1;
       warmUpUtterance.lang = 'es-MX';
@@ -119,56 +116,54 @@
     };
   }
 
-  if (esDoctor) {
-    iniciarSistema();
-  } else {
-    btnActivar.addEventListener('click', iniciarSistema);
-  }
+  if (esDoctor) { iniciarSistema(); } 
+  else { btnActivar.addEventListener('click', iniciarSistema); }
 
-  // 👇 INICIO DE CAMBIOS EN LA FUNCIÓN DE LLAMADA 👇
   async function anunciarLlamada(citaId, nombre, buttonElement) {
     buttonElement.disabled = true;
     buttonElement.textContent = 'Llamando...';
     buttonElement.classList.add('opacity-50', 'cursor-not-allowed');
-    
     try {
-      // 1. Anunciar por voz (envía el nombre al sistema de streaming)
-      await fetch("{{ url_for('anunciar_llamada') }}", {
+      const response = await fetch("{{ url_for('llamar_y_marcar') }}", {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nombre: nombre }),
+        body: JSON.stringify({ citaId: citaId, nombre: nombre }),
       });
+      const result = await response.json();
+      if (!result.success) throw new Error(result.error || 'Error del servidor');
 
-      // 2. Marcar como llamado en la base de datos
-      await fetch(`/admin/marcar_llamado/${citaId}`, {
-        method: 'POST'
-      });
-
-      // 3. Actualizar la interfaz si todo fue exitoso
-      const checkbox = document.getElementById(`llamado-${citaId}`);
-      if (checkbox) checkbox.checked = true;
-
+      document.getElementById(`llamado-${citaId}`).checked = true;
       buttonElement.textContent = 'Llamado ✓';
-      buttonElement.classList.remove('bg-green-500');
+      // Cambiamos el color a azul para la confirmación visual
+      buttonElement.classList.remove('bg-green-500', 'bg-gray-500'); 
       buttonElement.classList.add('bg-blue-500');
-      
-      // No re-habilitamos el botón para evitar llamar dos veces
-      // Si quieres poder llamar de nuevo, descomenta el siguiente bloque:
-      
+
+      // AVISO: CAMBIO 2 DE 2 - Usamos setTimeout para reactivar el botón después de 2 segundos.
       setTimeout(() => {
         buttonElement.disabled = false;
         buttonElement.textContent = 'Llamar de Nuevo';
-        buttonElement.classList.remove('opacity-50', 'cursor-not-allowed');
-      }, 3000);
-      
+        // Lo devolvemos a un color secundario (gris) y quitamos los estilos de "deshabilitado"
+        buttonElement.classList.remove('opacity-50', 'cursor-not-allowed', 'bg-blue-500');
+        buttonElement.classList.add('bg-gray-500');
+      }, 2000); // 2000 milisegundos = 2 segundos
 
     } catch (error) {
-      alert('Hubo un error al intentar llamar al paciente.');
-      buttonElement.disabled = false; // Re-habilitar en caso de error
-      buttonElement.textContent = 'Llamar';
-      buttonElement.classList.remove('opacity-50', 'cursor-not-allowed');
+      console.error(error);
+      alert('Hubo un error al llamar al paciente.');
+      
+      // Lógica de error mejorada para restaurar el estado correcto del botón
+      buttonElement.disabled = false;
+      const checkbox = document.getElementById(`llamado-${citaId}`);
+      if (checkbox && checkbox.checked) {
+        buttonElement.textContent = 'Llamar de Nuevo';
+        buttonElement.classList.remove('opacity-50', 'cursor-not-allowed');
+        buttonElement.classList.add('bg-gray-500');
+      } else {
+        buttonElement.textContent = 'Llamar';
+        buttonElement.classList.remove('opacity-50', 'cursor-not-allowed');
+        buttonElement.classList.add('bg-green-500');
+      }
     }
   }
-  // 👆 FIN DE CAMBIOS EN LA FUNCIÓN DE LLAMADA 👆
 </script>
 {% endblock %}

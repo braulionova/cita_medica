@@ -478,19 +478,20 @@ def desbloquear(id):
     flash("✅ Fecha desbloqueada correctamente", "success")
     return redirect(url_for("admin"))
 
-# 1. RUTA DE STREAMING: La tablet se conecta aquí para escuchar
 @app.route('/stream')
 def stream():
     def event_stream():
         while True:
             try:
-                nombre_paciente = announcement_queue.get(timeout=5)
+                # Intenta obtener un item de la cola, pero con un timeout de 20 segundos
+                nombre_paciente = announcement_queue.get(timeout=10)
                 yield f"data: {nombre_paciente}\n\n"
             except Empty:
+                # Si después de 20 segundos no hay nada, envía un comentario "keep-alive"
+                # Esto no dispara el evento 'onmessage' en el cliente, es invisible para el usuario.
                 yield ": keep-alive\n\n"
     
     return Response(event_stream(), mimetype='text/event-stream')
-
 
 # NUEVA RUTA: La página del doctor enviará el nombre del paciente aquí
 @app.route('/admin/anunciar_llamada', methods=['POST'])
@@ -555,7 +556,7 @@ def marcar_llamado(cita_id):
         print(f"Error al marcar como llamado: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
-# 2. RUTA DE LA SALA UNIFICADA: Carga la página para la doctora y la tablet
+# 👇 NUEVA RUTA UNIFICADA QUE REEMPLAZA A LAS DOS ANTERIORES 👇
 @app.route("/sala")
 def sala_unificada():
     es_doctor = "usuario" in session
@@ -564,6 +565,7 @@ def sala_unificada():
     citas = []
     if es_doctor:
         try:
+            # 👇 MODIFICACIÓN: Añade 'fue_llamado' al select
             response = supabase.table("citas").select("id, nombre, fue_llamado") \
                                               .eq("fecha", filtro_fecha) \
                                               .order("orden", desc=False) \
@@ -571,7 +573,8 @@ def sala_unificada():
             citas = response.data
         except Exception as e:
             flash(f"❌ Error al cargar la lista de pacientes: {e}", "error")
-    
+            print(f"Error cargando pacientes: {e}")
+
     return render_template(
         "sala_unificada.html", 
         citas=citas, 
@@ -608,31 +611,6 @@ def sala_paciente():
         filtro_fecha=filtro_fecha, 
         es_doctor=es_doctor
     )
-
-# 3. RUTA DE ACCIÓN: La doctora envía aquí la orden de llamar
-@app.route('/admin/llamar_y_marcar', methods=['POST'])
-def llamar_y_marcar():
-    if "usuario" not in session:
-        return jsonify({'success': False, 'error': 'No autorizado'}), 401
-    
-    try:
-        data = request.get_json()
-        cita_id = data.get('citaId')
-        nombre = data.get('nombre')
-
-        if not cita_id or not nombre:
-            return jsonify({'success': False, 'error': 'Faltan datos'}), 400
-
-        # Paso A: Flask actualiza Supabase de forma segura
-        supabase.table('citas').update({'fue_llamado': True}).eq('id', cita_id).execute()
-        
-        # Paso B: Flask pone el anuncio en la cola para el streaming
-        announcement_queue.put(nombre)
-        
-        return jsonify({'success': True})
-
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 if __name__ == "__main__":
