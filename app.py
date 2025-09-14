@@ -337,30 +337,51 @@ def admin():
         flash("⚠️ Debes iniciar sesión para acceder al panel", "error")
         return redirect(url_for("login"))
 
-    # Obtiene el parámetro 'fecha' de la URL. Puede ser una fecha, una cadena vacía, o None.
     filtro_fecha = request.args.get("fecha")
     
-    # Prepara la consulta base
-    query = supabase.table("citas").select("*").order("fecha", desc=True)
+    # Prepara la consulta base, AHORA ORDENANDO POR LA NUEVA COLUMNA 'orden'
+    query = supabase.table("citas").select("*").order("orden", desc=False) # desc=False es ascendente (0, 1, 2...)
 
     if filtro_fecha is None:
-        # CASO 1: No hay parámetro 'fecha' en la URL (primera visita).
-        # Usamos la fecha de hoy por defecto.
         filtro_fecha = date.today().strftime('%Y-%m-%d')
         query = query.eq("fecha", filtro_fecha)
     elif filtro_fecha:
-        # CASO 2: El parámetro 'fecha' tiene un valor (no es una cadena vacía).
-        # Filtramos por esa fecha.
         query = query.eq("fecha", filtro_fecha)
-    # CASO 3: filtro_fecha es una cadena vacía ('').
-    # No hacemos nada, por lo que la consulta base traerá todas las citas.
     
     citas = query.execute().data
-    
     bloqueadas = supabase.table("fechas_bloqueadas").select("*").order("fecha", desc=True).execute().data
 
-    # Pasamos 'filtro_fecha' a la plantilla. Será la fecha de hoy, la seleccionada, o una cadena vacía.
     return render_template("admin.html", citas=citas, bloqueadas=bloqueadas, filtro_fecha=filtro_fecha)
+
+@app.route('/admin/actualizar_orden', methods=['POST'])
+def actualizar_orden():
+    if "usuario" not in session:
+        return jsonify({'success': False, 'error': 'No autorizado'}), 401
+
+    try:
+        data = request.get_json()
+        ordered_ids = data.get('order')
+
+        if not ordered_ids:
+            return jsonify({'success': False, 'error': 'No se proporcionó orden'}), 400
+
+        # Prepara los datos para la actualización masiva (upsert)
+        updates = []
+        for index, cita_id in enumerate(ordered_ids):
+            updates.append({
+                'id': int(cita_id), 
+                'orden': index  # El nuevo orden es el índice en la lista
+            })
+
+        # Ejecuta la actualización en Supabase de forma individual para cada cita
+        for update in updates:
+            supabase.table('citas').update({'orden': update['orden']}).eq('id', update['id']).execute()
+        
+        return jsonify({'success': True})
+
+    except Exception as e:
+        print(f"Error al actualizar orden: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 # Eliminar cita
 @app.route("/admin/eliminar_cita/<int:id>", methods=["POST"])
@@ -513,7 +534,7 @@ def llamar_paciente():
         # Ordenamos por nombre para tener una lista alfabética
         response = supabase.table("citas").select("id, nombre") \
                                           .eq("fecha", filtro_fecha) \
-                                          .order("nombre", desc=False) \
+                                          .order("orden", desc=False) \
                                           .execute()
         citas = response.data
     except Exception as e:
@@ -523,9 +544,47 @@ def llamar_paciente():
     # Esta línea renderiza el formulario que crearemos en el siguiente paso
     return render_template("llamar_paciente.html", citas=citas, filtro_fecha=filtro_fecha)
 
+@app.route('/admin/marcar_llamado/<int:cita_id>', methods=['POST'])
+def marcar_llamado(cita_id):
+    if "usuario" not in session:
+        return jsonify({'success': False, 'error': 'No autorizado'}), 401
+    
+    try:
+        supabase.table('citas').update({'fue_llamado': True}).eq('id', cita_id).execute()
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f"Error al marcar como llamado: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 # 👇 NUEVA RUTA UNIFICADA QUE REEMPLAZA A LAS DOS ANTERIORES 👇
 @app.route("/sala")
 def sala_unificada():
+    es_doctor = "usuario" in session
+    filtro_fecha = request.args.get("fecha", date.today().strftime('%Y-%m-%d'))
+    
+    citas = []
+    if es_doctor:
+        try:
+            # 👇 MODIFICACIÓN: Añade 'fue_llamado' al select
+            response = supabase.table("citas").select("id, nombre, fue_llamado") \
+                                              .eq("fecha", filtro_fecha) \
+                                              .order("orden", desc=False) \
+                                              .execute()
+            citas = response.data
+        except Exception as e:
+            flash(f"❌ Error al cargar la lista de pacientes: {e}", "error")
+            print(f"Error cargando pacientes: {e}")
+
+    return render_template(
+        "sala_unificada.html", 
+        citas=citas, 
+        filtro_fecha=filtro_fecha, 
+        es_doctor=es_doctor
+    )
+
+# 👇 NUEVA RUTA UNIFICADA QUE REEMPLAZA A LAS DOS ANTERIORES 👇
+@app.route("/sala_paciente")
+def sala_paciente():
     # Determinamos si el usuario es la doctora (si ha iniciado sesión)
     es_doctor = "usuario" in session
 
@@ -538,7 +597,7 @@ def sala_unificada():
         try:
             response = supabase.table("citas").select("id, nombre") \
                                               .eq("fecha", filtro_fecha) \
-                                              .order("nombre", desc=False) \
+                                              .order("orden", desc=False) \
                                               .execute()
             citas = response.data
         except Exception as e:
@@ -547,7 +606,7 @@ def sala_unificada():
 
     # Renderizamos la nueva plantilla unificada, pasándole toda la información
     return render_template(
-        "sala_unificada.html", 
+        "sala_paciente.html", 
         citas=citas, 
         filtro_fecha=filtro_fecha, 
         es_doctor=es_doctor

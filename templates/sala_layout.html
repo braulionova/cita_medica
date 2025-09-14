@@ -1,0 +1,36 @@
+<!-- templates/sala_layout.html -->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- El título se podrá cambiar desde cada página hija -->
+  <title>{% block title %}Sala de Pacientes{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100">
+
+  <!-- INICIO: CABECERA SIMPLE -->
+  <header class="bg-gray-800 text-white shadow-md">
+    <div class="container mx-auto p-4 flex justify-between items-center">
+      <h1 class="text-xl font-bold">
+        <!-- Puedes hacer este título dinámico si lo necesitas -->
+        🗣️ Sala de Llamadas Unificada
+      </h1>
+      <div class="flex items-center space-x-4">
+        <a href="{{ url_for('admin') }}" class="text-sm hover:text-gray-300 transition">❮ Volver al Panel</a>
+        <a href="{{ url_for('logout') }}" class="px-4 py-2 rounded bg-red-600 text-sm text-center hover:bg-red-700 transition">🚪 Cerrar Sesión</a>
+      </div>
+    </div>
+  </header>
+  <!-- FIN: CABECERA SIMPLE -->
+
+  <!-- INICIO: CONTENIDO PRINCIPAL -->
+  <main class="p-4 md:p-6 lg:p-8">
+    <!-- Aquí se insertará el contenido de la página de la sala de pacientes -->
+    {% block content %}{% endblock %}
+  </main>
+  <!-- FIN: CONTENIDO PRINCIPAL -->
+
+</body>
+</html>

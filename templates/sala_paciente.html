@@ -1,11 +1,11 @@
-<!-- templates/sala_unificada.html (VERSIÓN FINAL CON CHECKBOX) -->
-{% extends "admin_layout.html" %}
+<!-- templates/sala_unificada.html (VERSIÓN FINAL Y ROBUSTA) -->
+{% extends "sala_layout.html" %}
 
 {% block title %}Sala de Llamadas{% endblock %}
 
 {% block content %}
 
-<!-- PANTALLA DE INICIO (sin cambios) -->
+<!-- PANTALLA DE INICIO PARA ACTIVAR AUDIO -->
 <div id="pantalla-inicio" class="text-center">
   <h1 class="text-3xl font-bold mb-4">Sistema de Anuncios</h1>
   <p class="text-lg text-gray-600 mb-8">Presione el botón para activar la sala de espera.</p>
@@ -19,10 +19,10 @@
   <h1 class="text-3xl font-bold mb-6">🗣️ Sala de Llamadas y Anuncios</h1>
   {% if es_doctor %}
   <div id="panel-doctora" class="mb-8">
-    <!-- Panel de filtro (sin cambios) -->
+    <!-- ... (El panel de la doctora no cambia, se queda igual) ... -->
     <div class="bg-white shadow-md rounded-lg p-4 mb-6">
       <h3 class="font-semibold text-lg mb-3">Filtrar Pacientes por Fecha</h3>
-      <form method="GET" action="{{ url_for('sala_unificada') }}" class="flex flex-wrap items-end gap-4">
+      <form method="GET" action="{{ url_for('sala_paciente') }}" class="flex flex-wrap items-end gap-4">
         <div>
           <label for="fecha-filtro" class="block text-sm font-medium text-gray-700 mb-1">Citas del día:</label>
           <input type="date" id="fecha-filtro" name="fecha" value="{{ filtro_fecha }}" class="border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500">
@@ -32,20 +32,14 @@
         </button>
       </form>
     </div>
-    <!-- 👇 INICIO DE CAMBIOS EN LA LISTA DE PACIENTES 👇 -->
     <div class="bg-white shadow-md rounded-lg p-4">
       <h2 class="text-xl font-semibold mb-4">👥 Pacientes para el {{ filtro_fecha }}</h2>
       {% if citas %}
       <div class="space-y-3">
         {% for cita in citas %}
         <div class="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50">
-          <!-- Contenedor para el checkbox y el nombre -->
-          <div class="flex items-center gap-3">
-            <input type="checkbox" id="llamado-{{ cita.id }}" class="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500" disabled {% if cita.fue_llamado %}checked{% endif %}>
-            <span class="font-medium text-gray-800">{{ cita.nombre }}</span>
-          </div>
-          <!-- El botón ahora pasa el ID de la cita a la función JS -->
-          <button onclick="anunciarLlamada('{{ cita.id }}', '{{ cita.nombre }}', this)" class="bg-green-500 text-white py-1 px-4 rounded-md hover:bg-green-600 transition text-sm">
+          <span class="font-medium text-gray-800">{{ cita.nombre }}</span>
+          <button onclick="anunciarLlamada('{{ cita.nombre }}', this)" class="bg-green-500 text-white py-1 px-4 rounded-md hover:bg-green-600 transition text-sm">
             Llamar
           </button>
         </div>
@@ -55,11 +49,10 @@
       <p class="text-center p-4 text-gray-500">No hay pacientes registrados para la fecha seleccionada.</p>
       {% endif %}
     </div>
-     <!-- 👆 FIN DE CAMBIOS EN LA LISTA DE PACIENTES 👆 -->
   </div>
   {% endif %}
 
-  <!-- SECCIÓN DE ANUNCIOS (sin cambios) -->
+  <!-- SECCIÓN DE ANUNCIOS -->
   <div id="panel-anuncios" class="bg-white p-6 rounded-lg shadow-md max-w-md mx-auto text-center">
     <div class="flex items-center justify-center space-x-3 mb-4">
       <div id="status-indicator" class="w-4 h-4 rounded-full bg-yellow-400 animate-pulse"></div>
@@ -73,7 +66,6 @@
 </div>
 
 <script>
-  // ... (función anunciarPaciente y lógica de inicio sin cambios) ...
   function anunciarPaciente(nombre) {
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
@@ -92,26 +84,40 @@
   function iniciarSistema() {
     pantallaInicio.style.display = 'none';
     contenidoPrincipal.classList.remove('hidden');
+
+    // =========================================================================
+    //  👇 INICIO DEL CAMBIO IMPORTANTE: "CALENTAR" EL MOTOR DE VOZ 👇
+    // =========================================================================
     if ('speechSynthesis' in window) {
+      // Creamos una frase de bienvenida para forzar la inicialización del motor.
+      // Esto es crucial para que el primer llamado real funcione.
       const warmUpUtterance = new SpeechSynthesisUtterance("Sistema de anuncios activado.");
-      warmUpUtterance.volume = 0.1;
+      warmUpUtterance.volume = 0.1; // Ponemos un volumen bajo para que no sea molesto
       warmUpUtterance.lang = 'es-MX';
       window.speechSynthesis.speak(warmUpUtterance);
     }
+    // =========================================================================
+    //  👆 FIN DEL CAMBIO IMPORTANTE 👆
+    // =========================================================================
+
+    // Ahora, conectamos al servidor. El motor de voz ya estará listo.
     const eventSource = new EventSource("{{ url_for('stream') }}");
     const statusIndicator = document.getElementById('status-indicator');
     const statusText = document.getElementById('status-text');
     const lastCalled = document.getElementById('last-called');
+
     eventSource.onopen = function() {
       statusIndicator.classList.remove('bg-yellow-400', 'bg-red-500', 'animate-pulse');
       statusIndicator.classList.add('bg-green-500');
       statusText.textContent = 'Conectado. Escuchando anuncios...';
     };
+
     eventSource.onmessage = function(event) {
       const nombrePaciente = event.data;
       lastCalled.textContent = nombrePaciente;
       anunciarPaciente(nombrePaciente);
     };
+
     eventSource.onerror = function(err) {
       statusIndicator.classList.remove('bg-yellow-400', 'bg-green-500');
       statusIndicator.classList.add('bg-red-500', 'animate-pulse');
@@ -125,50 +131,33 @@
     btnActivar.addEventListener('click', iniciarSistema);
   }
 
-  // 👇 INICIO DE CAMBIOS EN LA FUNCIÓN DE LLAMADA 👇
-  async function anunciarLlamada(citaId, nombre, buttonElement) {
+  async function anunciarLlamada(nombre, buttonElement) {
+    // ... (Esta función no necesita cambios) ...
     buttonElement.disabled = true;
     buttonElement.textContent = 'Llamando...';
     buttonElement.classList.add('opacity-50', 'cursor-not-allowed');
-    
     try {
-      // 1. Anunciar por voz (envía el nombre al sistema de streaming)
-      await fetch("{{ url_for('anunciar_llamada') }}", {
+      const response = await fetch("{{ url_for('anunciar_llamada') }}", {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ nombre: nombre }),
       });
-
-      // 2. Marcar como llamado en la base de datos
-      await fetch(`/admin/marcar_llamado/${citaId}`, {
-        method: 'POST'
-      });
-
-      // 3. Actualizar la interfaz si todo fue exitoso
-      const checkbox = document.getElementById(`llamado-${citaId}`);
-      if (checkbox) checkbox.checked = true;
-
+      if (!response.ok) throw new Error('Error del servidor');
       buttonElement.textContent = 'Llamado ✓';
       buttonElement.classList.remove('bg-green-500');
       buttonElement.classList.add('bg-blue-500');
-      
-      // No re-habilitamos el botón para evitar llamar dos veces
-      // Si quieres poder llamar de nuevo, descomenta el siguiente bloque:
-      
       setTimeout(() => {
         buttonElement.disabled = false;
-        buttonElement.textContent = 'Llamar de Nuevo';
-        buttonElement.classList.remove('opacity-50', 'cursor-not-allowed');
+        buttonElement.textContent = 'Llamar';
+        buttonElement.classList.remove('opacity-50', 'cursor-not-allowed', 'bg-blue-500');
+        buttonElement.classList.add('bg-green-500');
       }, 3000);
-      
-
     } catch (error) {
       alert('Hubo un error al intentar llamar al paciente.');
-      buttonElement.disabled = false; // Re-habilitar en caso de error
+      buttonElement.disabled = false;
       buttonElement.textContent = 'Llamar';
       buttonElement.classList.remove('opacity-50', 'cursor-not-allowed');
     }
   }
-  // 👆 FIN DE CAMBIOS EN LA FUNCIÓN DE LLAMADA 👆
 </script>
 {% endblock %}
