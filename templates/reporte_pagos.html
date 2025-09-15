@@ -1,0 +1,92 @@
+<!-- templates/reporte_pagos.html -->
+{% extends "admin_layout.html" %}
+
+{% block title %}Reporte de Pagos{% endblock %}
+
+{% block content %}
+<div class="bg-white p-6 sm:p-8 rounded-2xl shadow-xl max-w-6xl mx-auto"> <!-- Aumenté el max-w para más espacio -->
+    <h2 class="text-2xl sm:text-3xl font-bold mb-6 text-center text-gray-800">📊 Reporte de Pagos Realizados</h2>
+
+    <!-- Formulario de Filtro (sin cambios) -->
+    <div class="mb-8 p-4 border rounded-lg bg-gray-50">
+        <h3 class="font-semibold text-lg mb-3">Filtrar por Rango de Fechas</h3>
+        <form method="GET" action="{{ url_for('reporte_pagos') }}" class="flex flex-wrap items-end gap-4">
+            <div>
+                <label for="fecha_desde" class="block text-sm font-medium text-gray-700 mb-1">Desde</label>
+                <input type="date" id="fecha_desde" name="fecha_desde" value="{{ fecha_desde or '' }}" required class="border-gray-300 rounded-md shadow-sm">
+            </div>
+            <div>
+                <label for="fecha_hasta" class="block text-sm font-medium text-gray-700 mb-1">Hasta</label>
+                <input type="date" id="fecha_hasta" name="fecha_hasta" value="{{ fecha_hasta or '' }}" required class="border-gray-300 rounded-md shadow-sm">
+            </div>
+            <button type="submit" class="bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700">Generar Reporte</button>
+        </form>
+    </div>
+
+    <!-- Mensajes Flash (sin cambios) -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="mb-6">
+          {% for category, message in messages %}
+            <div class="p-3 rounded text-sm bg-red-100 text-red-800">
+              {{ message }}
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <!-- Tabla de Resultados -->
+    <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-100">
+                <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha de Pago</th>
+                    <!-- ===== NUEVA CABECERA ===== -->
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha de la Cita</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Paciente</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Método</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Notas</th>
+                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Monto</th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+                {% for pago in pagos %}
+                <tr>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{{ pago.fecha_pago }}</td>
+                    <!-- ===== NUEVA CELDA CON LA FECHA DE LA CITA ===== -->
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{{ pago.citas.fecha if pago.citas else 'N/A' }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ pago.citas.nombre if pago.citas else 'Cita eliminada' }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{{ pago.metodo_pago }}</td>
+                    <td class="px-6 py-4 text-sm text-gray-500 max-w-xs truncate">{{ pago.notas or '-' }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800 text-right font-semibold">${{ "%.2f"|format(pago.monto) }}</td>
+                </tr>
+                {% else %}
+                    {% if fecha_desde and fecha_hasta %}
+                        <tr>
+                            <td colspan="6" class="px-6 py-10 text-center text-gray-500"> <!-- Colspan ahora es 6 -->
+                                No se encontraron pagos para el rango de fechas seleccionado.
+                            </td>
+                        </tr>
+                    {% else %}
+                        <tr>
+                            <td colspan="6" class="px-6 py-10 text-center text-gray-500"> <!-- Colspan ahora es 6 -->
+                                Por favor, seleccione un rango de fechas para generar el reporte.
+                            </td>
+                        </tr>
+                    {% endif %}
+                {% endfor %}
+            </tbody>
+            {% if pagos %}
+            <tfoot class="bg-gray-100">
+                <tr>
+                    <!-- ===== COLSPAN AJUSTADO A 5 ===== -->
+                    <td colspan="5" class="px-6 py-4 text-right text-sm font-bold text-gray-800 uppercase">Total</td>
+                    <td class="px-6 py-4 text-right text-sm font-bold text-gray-900">${{ "%.2f"|format(total_reporte) }}</td>
+                </tr>
+            </tfoot>
+            {% endif %}
+        </table>
+    </div>
+</div>
+{% endblock %}

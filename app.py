@@ -118,19 +118,27 @@ def get_dias_llenos():
 
     return dias_llenos
     
-# --- RUTA PARA LA CONFIGURACIÓN (ACTUALIZADA) ---
 @app.route("/admin/configuracion", methods=["GET", "POST"])
 def configuracion():
     if "usuario" not in session:
         flash("⚠️ Debes iniciar sesión para acceder", "error")
         return redirect(url_for("login"))
+
+    # Definimos los servicios en un solo lugar para usarlos tanto en GET como en POST.
+    # Esta es nuestra "única fuente de verdad" para los tipos de consulta.
+    servicios = [
+        ('ginecologica', 'Consulta ginecológica'),
+        ('mama', 'Consulta de mama'),
+        ('post', 'Post quirúrgico'),
+        ('biopsia', 'Biopsia'),
+        ('resultados', 'Entrega de resultados')
+    ]
         
     if request.method == "POST":
-        # Bloqueo de fines de semana
+        # --- Lógica existente para bloqueos y límites (sin cambios) ---
         sabados_bloqueados = 'true' if 'bloquear_sabados' in request.form else 'false'
         domingos_bloqueados = 'true' if 'bloquear_domingos' in request.form else 'false'
         
-        # NUEVO: Límites de pacientes
         dias = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado']
         config_updates = [
             {'clave': 'bloquear_sabados', 'valor': sabados_bloqueados},
@@ -138,22 +146,31 @@ def configuracion():
         ]
         for dia in dias:
             limite = request.form.get(f'max_pacientes_{dia}')
-            # Si el campo está vacío, lo guardamos como un número alto (sin límite)
             valor_a_guardar = limite if limite else '999'
             config_updates.append({'clave': f'max_pacientes_{dia}', 'valor': valor_a_guardar})
 
+        # --- NUEVA LÓGICA PARA GUARDAR PRECIOS ---
+        # Recorremos la lista de servicios y obtenemos el precio de cada uno desde el formulario.
+        for key, _ in servicios:
+            # Creamos la clave de la base de datos, ej: "precio_ginecologica"
+            clave_precio = f'precio_{key}'
+            # Obtenemos el valor del formulario. Si está vacío, guardamos una cadena vacía.
+            valor_precio = request.form.get(clave_precio, '')
+            config_updates.append({'clave': clave_precio, 'valor': valor_precio})
+        
+        # Guardamos todas las actualizaciones (límites, bloqueos y precios) en una sola llamada.
         try:
             supabase.table('configuracion').upsert(config_updates, on_conflict='clave').execute()
             flash("✅ Configuración guardada correctamente.", "success")
         except Exception as e:
             flash(f"❌ Error al guardar la configuración: {e}", "error")
-            print(f"Error al guardar config: {e}")
             
         return redirect(url_for('configuracion'))
 
-    # Para el método GET
+    # Para el método GET, obtenemos la configuración y la pasamos al template,
+    # incluyendo ahora la lista de servicios para construir el formulario dinámicamente.
     config = get_configuracion()
-    return render_template("configuracion.html", configuracion=config)
+    return render_template("configuracion.html", configuracion=config, servicios=servicios)
 
 
 @app.route("/", methods=["GET", "POST"])
@@ -416,8 +433,8 @@ def mover_cita(id):
         nueva_fecha_str = request.form["nueva_fecha"]
         nueva_fecha_obj = datetime.strptime(nueva_fecha_str, '%Y-%m-%d')
 
-        if nueva_fecha in fechas_no_disponibles:
-            flash(f"❌ No se puede mover la cita al {nueva_fecha} porque la fecha está llena o bloqueada.", "error")
+        if nueva_fecha_str in fechas_no_disponibles:
+            flash(f"❌ No se puede mover la cita al {nueva_fecha_str} porque la fecha está llena o bloqueada.", "error")
             return redirect(url_for("mover_cita", id=id))
 
         # --- VALIDACIÓN DE FINES DE SEMANA (también aquí) ---
@@ -633,6 +650,137 @@ def llamar_y_marcar():
 
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+    
+@app.route('/admin/pagos', methods=['GET', 'POST'])
+def registrar_pago():
+    if "usuario" not in session:
+        flash("⚠️ Debes iniciar sesión para acceder", "error")
+        return redirect(url_for("login"))
+    
+    servicios = [
+        ('ginecologica', 'Consulta ginecológica'),
+        ('mama', 'Consulta de mama'),
+        ('post', 'Post quirúrgico'),
+        ('biopsia', 'Biopsia'),
+        ('resultados', 'Entrega de resultados')
+    ]
+
+    if request.method == 'POST':
+        # ... (La lógica POST no necesita cambios) ...
+        try:
+            cita_id = request.form['cita_id']
+            monto = request.form['monto']
+            metodo_pago = request.form['metodo_pago']
+            fecha_pago = request.form['fecha_pago']
+            notas = request.form.get('notas', '')
+            motivo_actualizado = request.form['motivo']
+
+            supabase.table('pagos').insert({
+                'cita_id': cita_id, 'monto': monto, 'metodo_pago': metodo_pago,
+                'fecha_pago': fecha_pago, 'notas': notas
+            }).execute()
+
+            supabase.table('citas').update({
+                'pagado': True, 'motivo': motivo_actualizado
+            }).eq('id', cita_id).execute()
+
+            flash('✅ Pago registrado correctamente y motivo actualizado.', 'success')
+        except Exception as e:
+            flash(f'❌ Error al registrar el pago: {e}', 'error')
+        
+        fecha_actual = request.args.get('fecha', date.today().strftime('%Y-%m-%d'))
+        return redirect(url_for('registrar_pago', fecha=fecha_actual))
+
+    # --- LÓGICA GET ACTUALIZADA ---
+    filtro_fecha = request.args.get("fecha", date.today().strftime('%Y-%m-%d'))
+    config = get_configuracion()
+    
+    # --- 1. OBTENER CITAS PENDIENTES DE PAGO (como antes) ---
+    citas_por_pagar = []
+    try:
+        response_pendientes = supabase.table('citas').select('*') \
+            .eq('fecha', filtro_fecha).eq('pagado', False) \
+            .order('orden', desc=False).execute()
+        citas_por_pagar = response_pendientes.data
+    except Exception as e:
+        flash(f'❌ Error al cargar citas pendientes: {e}', 'error')
+
+    # --- 2. NUEVO: OBTENER PAGOS YA REALIZADOS para la fecha de la cita ---
+    pagos_realizados = []
+    try:
+        response_pagados = supabase.table('pagos').select('*, citas!inner(nombre, motivo, fecha)') \
+            .eq('citas.fecha', filtro_fecha) \
+            .order('id', desc=True).execute()
+        
+        # # Imprimimos la respuesta cruda en la consola para inspeccionarla
+        # print("----------- DATOS CRUDOS DE SUPABASE (pagos realizados) -----------")
+        # print(response_pagados.data)
+        # print(f"----------- FILTRANDO POR FECHA: {filtro_fecha} -----------")
+
+        pagos_realizados = response_pagados.data
+    except Exception as e:
+        flash(f'❌ Error al cargar pagos realizados: {e}', 'error')
+    
+    # --- 3. NUEVO: CALCULAR TOTALES ---
+    total_pagado = sum(float(pago.get('monto', 0) or 0) for pago in pagos_realizados)
+    
+    total_pendiente = 0
+    for cita in citas_por_pagar:
+        clave_precio = f"precio_{cita.get('motivo', '')}"
+        precio_str = config.get(clave_precio, '0')
+        try:
+            total_pendiente += float(precio_str or 0)
+        except (ValueError, TypeError):
+            # Ignora si el precio no es un número válido
+            pass
+
+    return render_template(
+        "pagos.html", 
+        citas_por_pagar=citas_por_pagar, 
+        pagos_realizados=pagos_realizados, # <- Pasamos la nueva lista
+        total_pagado=total_pagado,         # <- Pasamos el nuevo total
+        total_pendiente=total_pendiente,   # <- Pasamos el nuevo total
+        configuracion=config,
+        filtro_fecha=filtro_fecha,
+        date=date,
+        servicios=servicios
+    )
+
+@app.route('/admin/reporte_pagos', methods=['GET'])
+def reporte_pagos():
+    if "usuario" not in session:
+        flash("⚠️ Debes iniciar sesión para acceder", "error")
+        return redirect(url_for("login"))
+
+    fecha_desde = request.args.get('fecha_desde')
+    fecha_hasta = request.args.get('fecha_hasta')
+
+    pagos = []
+    total_reporte = 0
+
+    if fecha_desde and fecha_hasta:
+        try:
+            # ===== MODIFICACIÓN AQUÍ: añadimos 'fecha' al select de citas =====
+            response = supabase.table('pagos') \
+                .select('*, citas(nombre, motivo, fecha)') \
+                .gte('fecha_pago', fecha_desde) \
+                .lte('fecha_pago', fecha_hasta) \
+                .order('fecha_pago', desc=True) \
+                .execute()
+            
+            pagos = response.data
+            total_reporte = sum(float(pago.get('monto', 0) or 0) for pago in pagos)
+
+        except Exception as e:
+            flash(f'❌ Error al generar el reporte: {e}', 'error')
+
+    return render_template(
+        'reporte_pagos.html',
+        pagos=pagos,
+        total_reporte=total_reporte,
+        fecha_desde=fecha_desde,
+        fecha_hasta=fecha_hasta
+    )
 
 
 if __name__ == "__main__":
