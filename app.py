@@ -372,7 +372,7 @@ def registrar_cita():
                                 form_data=request.form)  # Mantenemos los datos del formulario
             
         # Solo redirigimos si la cita se registró correctamente
-        flash("✅ Cita registrada correctamente", "success")
+        #flash("✅ Cita registrada correctamente", "success")
         return redirect(url_for("registrar_cita"))
     
     # Si es GET, renderiza la plantilla y pasa la lista de fechas y la configuración
