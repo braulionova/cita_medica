@@ -1,0 +1,92 @@
+<!-- templates/usuarios.html -->
+{% extends "admin_layout.html" %}
+
+{% block title %}Gestión de Usuarios{% endblock %}
+
+{% block content %}
+<h1 class="text-3xl font-bold mb-6 text-gray-800">Gestión de Usuarios</h1>
+
+<!-- Sección de Flashes/Alertas -->
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    {% for category, message in messages %}
+      <div class="p-4 mb-4 text-sm rounded-lg 
+                  {% if category == 'success' %} bg-green-100 text-green-800 
+                  {% elif category == 'error' %} bg-red-100 text-red-800 
+                  {% else %} bg-blue-100 text-blue-800 {% endif %}" role="alert">
+        {{ message }}
+      </div>
+    {% endfor %}
+  {% endif %}
+{% endwith %}
+
+<!-- Formulario para Registrar Nuevo Usuario -->
+<div class="bg-white p-6 rounded-lg shadow-md mb-8">
+  <h2 class="text-2xl font-semibold mb-4 text-gray-700">Registrar Nuevo Usuario</h2>
+  <form action="{{ url_for('gestion_usuarios') }}" method="POST" class="space-y-4">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div>
+        <label for="username" class="block text-sm font-medium text-gray-700">Nombre de Usuario</label>
+        <input type="text" id="username" name="username" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+      </div>
+      <div>
+        <label for="role" class="block text-sm font-medium text-gray-700">Rol</label>
+        <select id="role" name="role" required class="mt-1 block w-full px-3 py-2 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+          <option value="secretaria">Secretaria</option>
+          <option value="admin">Administrador</option>
+        </select>
+      </div>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div>
+        <label for="password" class="block text-sm font-medium text-gray-700">Contraseña</label>
+        <input type="password" id="password" name="password" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+      </div>
+      <div>
+        <label for="password_repeat" class="block text-sm font-medium text-gray-700">Repetir Contraseña</label>
+        <input type="password" id="password_repeat" name="password_repeat" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+      </div>
+    </div>
+    <div>
+      <button type="submit" class="w-full md:w-auto inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+        ➕ Registrar Usuario
+      </button>
+    </div>
+  </form>
+</div>
+
+<!-- Lista de Usuarios Existentes -->
+<div class="bg-white p-6 rounded-lg shadow-md">
+  <h2 class="text-2xl font-semibold mb-4 text-gray-700">Usuarios Registrados</h2>
+  <div class="overflow-x-auto">
+    <table class="min-w-full divide-y divide-gray-200">
+      <thead class="bg-gray-50">
+        <tr>
+          <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Usuario</th>
+          <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rol</th>
+          <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+        </tr>
+      </thead>
+      <tbody class="bg-white divide-y divide-gray-200">
+        {% for usuario in usuarios %}
+        <tr>
+          <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ usuario.username }}</td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ usuario.role | capitalize }}</td>
+          <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
+            <a href="{{ url_for('editar_usuario', user_id=usuario.id) }}" class="text-indigo-600 hover:text-indigo-900">✏️ Editar</a>
+            
+            <form action="{{ url_for('eliminar_usuario', user_id=usuario.id) }}" method="POST" class="inline" onsubmit="return confirm('¿Estás seguro de que quieres eliminar a {{ usuario.username }}? Esta acción no se puede deshacer.');">
+                <button type="submit" class="text-red-600 hover:text-red-900">🗑️ Eliminar</button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="3" class="px-6 py-4 text-center text-gray-500">No hay usuarios registrados.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
