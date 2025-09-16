@@ -251,20 +251,36 @@ def registrar_cita():
         # VALIDACIÓN 1: Fin de semana
         if config.get('bloquear_sabados') == 'true' and fecha_obj.weekday() == 5:
             flash("❌ No se pueden agendar citas los sábados.", "error")
-            return redirect(url_for("registrar_cita"))
+            return render_template("form.html", 
+                                fechas_bloqueadas=fechas_bloqueadas,
+                                dias_llenos=dias_llenos,
+                                configuracion=config,
+                                form_data=request.form)
         if config.get('bloquear_domingos') == 'true' and fecha_obj.weekday() == 6:
             flash("❌ No se pueden agendar citas los domingos.", "error")
-            return redirect(url_for("registrar_cita"))
+            return render_template("form.html", 
+                                fechas_bloqueadas=fechas_bloqueadas,
+                                dias_llenos=dias_llenos,
+                                configuracion=config,
+                                form_data=request.form)
             
         # VALIDACIÓN 2: Fecha bloqueada manualmente
         if fecha_str in fechas_bloqueadas_manualmente:
             flash("❌ La fecha seleccionada no está disponible. Por favor, elija otra.", "error")
-            return redirect(url_for("registrar_cita"))
+            return render_template("form.html", 
+                                fechas_bloqueadas=fechas_bloqueadas,
+                                dias_llenos=dias_llenos,
+                                configuracion=config,
+                                form_data=request.form)
 
         # VALIDACIÓN 3: Límite de pacientes por día
         if fecha_str in dias_llenos:
              flash("❌ El cupo para la fecha seleccionada está lleno. Por favor, elija otra.", "error")
-             return redirect(url_for("registrar_cita"))
+             return render_template("form.html", 
+                                fechas_bloqueadas=fechas_bloqueadas,
+                                dias_llenos=dias_llenos,
+                                configuracion=config,
+                                form_data=request.form)
     # Traer fechas bloqueadas
     try:
         fechas_bloqueadas_data = supabase.table("fechas_bloqueadas").select("fecha").execute().data
@@ -345,7 +361,15 @@ def registrar_cita():
         except Exception as e:
             flash(f"❌ Error al registrar la cita: {e}", "error")
             print(f"Error en Supabase: {e}")
-
+            # En caso de error, renderizamos el formulario nuevamente con los datos
+            return render_template("form.html", 
+                                fechas_bloqueadas=fechas_bloqueadas, 
+                                dias_llenos=dias_llenos,
+                                configuracion=config,
+                                form_data=request.form)  # Mantenemos los datos del formulario
+            
+        # Solo redirigimos si la cita se registró correctamente
+        flash("✅ Cita registrada correctamente", "success")
         return redirect(url_for("registrar_cita"))
     
     # Si es GET, renderiza la plantilla y pasa la lista de fechas y la configuración
