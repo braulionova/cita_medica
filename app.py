@@ -119,13 +119,14 @@ def get_configuracion():
     return config
 
 # --- FUNCIÓN MEJORADA PARA OBTENER DÍAS LLENOS ---
-def get_dias_llenos():
+def get_dias_llenos(config=None):
     """
     Consulta las citas, las agrupa por fecha y devuelve una lista de fechas
     que han alcanzado su límite de pacientes según la configuración.
     Solo considera fechas futuras.
     """
-    config = get_configuracion()
+    if config is None:
+        config = get_configuracion()
     dias_llenos = []
     
     # Mapeo de weekday() a claves de configuración (Lunes=0, Domingo=6)
@@ -239,7 +240,7 @@ def registrar_cita():
         # ... (código de manejo de error)
         fechas_bloqueadas_manualmente = set()
 
-    dias_llenos = set(get_dias_llenos())
+    dias_llenos = set(get_dias_llenos(config))
     # Combinamos ambas listas para pasarlas al frontend
     fechas_no_disponibles = list(fechas_bloqueadas_manualmente.union(dias_llenos))
 
