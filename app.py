@@ -9,8 +9,8 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
 import requests
 
-TELEGRAM_TOKEN = "8408430957:AAGvEjDAV6BfhW3n8JX7S-FAvEC8Vzoyki0"
-CHAT_ID = "-1003029581403"
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+CHAT_ID = os.getenv("CHAT_ID")
 
 
 def send_telegram_message(message):

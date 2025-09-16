@@ -2,5 +2,5 @@ Flask==3.0.0
 gunicorn==21.2.0
 supabase==2.0.3
 python-dotenv==1.0.0
-gevent==23.9.1
+gevent==24.2.1
 httpx>=0.24.1
