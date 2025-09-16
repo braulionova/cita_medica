@@ -403,6 +403,16 @@ def mover_cita(id):
     fechas_bloqueadas_data = supabase.table("fechas_bloqueadas").select("fecha").execute().data
     fechas_bloqueadas = [f["fecha"] for f in fechas_bloqueadas_data]
 
+    # Verificar si la cita tiene pagos registrados
+    try:
+        pagos = supabase.table("pagos").select("*").eq("cita_id", id).execute().data
+        if pagos:
+            flash("❌ No se puede mover la cita del paciente ya que tiene un pago registrado en el sistema.", "error")
+            return redirect(url_for("admin"))
+    except Exception as e:
+        flash(f"❌ Error al verificar los pagos: {e}", "error")
+        return redirect(url_for("admin"))
+
     try:
         fechas_bloqueadas_data = supabase.table("fechas_bloqueadas").select("fecha").execute().data
         fechas_bloqueadas_manualmente = {f["fecha"] for f in fechas_bloqueadas_data}

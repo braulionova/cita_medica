@@ -581,8 +581,6 @@ def mover_cita(id):
     if "usuario" not in session:
         flash("⚠️ Debes iniciar sesión para acceder", "error")
         return redirect(url_for("login"))
-    
-    
         
     config = get_configuracion() # <-- Obtener configuración
     fechas_bloqueadas_data = supabase.table("fechas_bloqueadas").select("fecha").execute().data
@@ -628,11 +626,55 @@ def mover_cita(id):
         if nueva_fecha in fechas_bloqueadas:
             flash(f"❌ No se puede mover la cita al {nueva_fecha} porque es una fecha bloqueada.", "error")
             return redirect(url_for("mover_cita", id=id))
+        
+        # Verificar si la cita tiene pagos registrados
+        try:
+            pagos = supabase.table("pagos").select("*").eq("cita_id", id).execute().data
+            if pagos:
+                flash("❌ No se puede mover la cita del paciente ya que tiene un pago registrado en el sistema.", "error")
+                return redirect(url_for("admin"))
+        except Exception as e:
+            flash(f"❌ Error al verificar los pagos: {e}", "error")
+            return redirect(url_for("admin"))
 
         # Actualizar la fecha en la base de datos
         try:
+            # Obtener los datos de la cita antes de actualizarla
+            cita = supabase.table("citas").select("*").eq("id", id).single().execute().data
+            fecha_anterior = cita.get('fecha', 'desconocida')
+
+            if not cita:
+                flash("❌ Cita no encontrada.", "error")
+                return redirect(url_for("admin"))
+                
+            # Actualizar la fecha
             supabase.table("citas").update({"fecha": nueva_fecha}).eq("id", id).execute()
             flash("✅ Cita movida correctamente a la nueva fecha.", "success")
+
+            # --- CONSTRUIR Y ENVIAR NOTIFICACIÓN DETALLADA POR TELEGRAM ---
+            # Usamos .get() para evitar errores si algún campo no existe o es nulo
+            cita = supabase.table("citas").select("*").eq("id", id).single().execute().data
+
+            paciente = cita.get('nombre', 'No especificado')
+            motivo = cita.get('motivo', 'No especificado')
+            #seguro = cita.get('nombre_seguro_medico', 'No aplica')
+            #num_seguro = cita.get('numero_seguro_medico', '')
+            fecha_nueva = cita.get('fecha', 'desconocida')
+
+            mensaje_telegram = (
+                f"🔄 *Cita Movida Exitosamente (Secretaria)*\n\n"
+                f"Se ha cambiado la fecha de la siguiente cita:\n\n"
+                f"👤 *Paciente:* {paciente}\n"
+                f"🗓️ *Fecha Anterior:* {fecha_anterior}\n"
+                f"➡️ *Nueva Fecha:* {fecha_nueva}\n\n"
+                f"📋 *Detalles Adicionales:*\n"
+                f"   - *Motivo:* {motivo}\n"
+            )
+
+            #print(mensaje_telegram)
+            
+            send_telegram_message(mensaje_telegram)
+            # Redirigir al panel de administración
             return redirect(url_for("admin"))
         except Exception as e:
             flash(f"❌ Error al mover la cita: {e}", "error")
@@ -689,6 +731,16 @@ def secretaria_mover_cita(id):
         if nueva_fecha_str in fechas_bloqueadas:
             flash(f"❌ No se puede mover la cita al {nueva_fecha_str} porque es una fecha bloqueada.", "error")
             return redirect(url_for("secretaria_mover_cita", id=id))
+        
+        # Verificar si la cita tiene pagos registrados
+        try:
+            pagos = supabase.table("pagos").select("*").eq("cita_id", id).execute().data
+            if pagos:
+                flash("❌ No se puede mover la cita del paciente ya que tiene un pago registrado en el sistema.", "error")
+                return redirect(url_for("secretaria_dashboard"))
+        except Exception as e:
+            flash(f"❌ Error al verificar los pagos: {e}", "error")
+            return redirect(url_for("secretaria_dashboard"))
 
     # Traer fechas bloqueadas para la validación
     fechas_bloqueadas_data = supabase.table("fechas_bloqueadas").select("fecha").execute().data
@@ -704,8 +756,41 @@ def secretaria_mover_cita(id):
 
         # Actualizar la fecha en la base de datos
         try:
+            # Obtener los datos de la cita antes de actualizarla
+            cita = supabase.table("citas").select("*").eq("id", id).single().execute().data
+            fecha_anterior = cita.get('fecha', 'desconocida')
+
+            if not cita:
+                flash("❌ Cita no encontrada.", "error")
+                return redirect(url_for("secretaria_dashboard"))
+                
+            # Actualizar la fecha
             supabase.table("citas").update({"fecha": nueva_fecha}).eq("id", id).execute()
             flash("✅ Cita movida correctamente a la nueva fecha.", "success")
+
+            # --- CONSTRUIR Y ENVIAR NOTIFICACIÓN DETALLADA POR TELEGRAM ---
+            # Usamos .get() para evitar errores si algún campo no existe o es nulo
+            cita = supabase.table("citas").select("*").eq("id", id).single().execute().data
+
+            paciente = cita.get('nombre', 'No especificado')
+            motivo = cita.get('motivo', 'No especificado')
+            #seguro = cita.get('nombre_seguro_medico', 'No aplica')
+            #num_seguro = cita.get('numero_seguro_medico', '')
+            fecha_nueva = cita.get('fecha', 'desconocida')
+
+            mensaje_telegram = (
+                f"🔄 *Cita Movida Exitosamente (Secretaria)*\n\n"
+                f"Se ha cambiado la fecha de la siguiente cita:\n\n"
+                f"👤 *Paciente:* {paciente}\n"
+                f"🗓️ *Fecha Anterior:* {fecha_anterior}\n"
+                f"➡️ *Nueva Fecha:* {fecha_nueva}\n\n"
+                f"📋 *Detalles Adicionales:*\n"
+                f"   - *Motivo:* {motivo}\n"
+            )
+            #print(mensaje_telegram)
+            #enviar mensaje a telegram
+            send_telegram_message(mensaje_telegram)
+            # Redirigir al panel de secretaria
             return redirect(url_for("secretaria_dashboard"))
         except Exception as e:
             flash(f"❌ Error al mover la cita: {e}", "error")
