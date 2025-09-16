@@ -1,3 +1,6 @@
+import eventlet
+eventlet.monkey_patch()
+
 import os
 from flask import Flask, render_template, request, redirect, session, url_for, flash, Response, jsonify
 from supabase import create_client, Client
