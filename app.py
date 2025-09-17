@@ -568,13 +568,6 @@ def actualizar_orden():
         print(f"Error al actualizar orden: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
-# Eliminar cita
-@app.route("/admin/eliminar_cita/<int:id>", methods=["POST"])
-def eliminar_cita(id):
-    supabase.table("citas").delete().eq("id", id).execute()
-    flash("🗑️ Cita eliminada correctamente", "success")
-    return redirect(url_for("admin"))
-
 # NUEVA RUTA para mostrar el formulario y procesar el cambio de fecha
 @app.route("/admin/mover_cita/<int:id>", methods=["GET", "POST"])
 def mover_cita(id):
@@ -1555,6 +1548,494 @@ def registrar_cita_secretaria():
         fechas_bloqueadas=fechas_bloqueadas, 
         dias_llenos=[],  # <-- ¡AQUÍ ESTÁ LA MAGIA! El script no bloqueará ningún día por estar lleno.
         configuracion=config
+    )
+
+@app.route('/admin/registrar_pagos', methods=['GET', 'POST'])
+def admin_registrar_pago():
+    if "usuario" not in session:
+        flash("⚠️ Debes iniciar sesión para acceder", "error")
+        return redirect(url_for("login"))
+    
+    servicios = [
+        ('ginecologica', 'Consulta ginecológica'),
+        ('mama', 'Consulta de mama'),
+        ('post', 'Post quirúrgico'),
+        ('biopsia', 'Biopsia'),
+        ('resultados', 'Entrega de resultados')
+    ]
+
+    if request.method == 'POST':
+        # ... (La lógica POST no necesita cambios) ...
+        try:
+            cita_id = request.form['cita_id']
+            monto = request.form['monto']
+            metodo_pago = request.form['metodo_pago']
+            fecha_pago = request.form['fecha_pago']
+            notas = request.form.get('notas', '')
+            motivo_actualizado = request.form['motivo']
+
+            supabase.table('pagos').insert({
+                'cita_id': cita_id, 'monto': monto, 'metodo_pago': metodo_pago,
+                'fecha_pago': fecha_pago, 'notas': notas
+            }).execute()
+
+            supabase.table('citas').update({
+                'pagado': True, 'motivo': motivo_actualizado
+            }).eq('id', cita_id).execute()
+
+            flash('✅ Pago registrado correctamente y motivo actualizado.', 'success')
+        except Exception as e:
+            flash(f'❌ Error al registrar el pago: {e}', 'error')
+        
+        fecha_actual = request.args.get('fecha', date.today().strftime('%Y-%m-%d'))
+
+        if session.get('role') == 'admin':
+            return redirect(url_for('admin_registrar_pago', fecha=fecha_actual))
+
+    # --- LÓGICA GET ACTUALIZADA ---
+    filtro_fecha = request.args.get("fecha", date.today().strftime('%Y-%m-%d'))
+    config = get_configuracion()
+    
+    # --- 1. OBTENER CITAS PENDIENTES DE PAGO (como antes) ---
+    citas_por_pagar = []
+    try:
+        response_pendientes = supabase.table('citas').select('*') \
+            .eq('fecha', filtro_fecha).eq('pagado', False) \
+            .order('orden', desc=False).execute()
+        citas_por_pagar = response_pendientes.data
+    except Exception as e:
+        flash(f'❌ Error al cargar citas pendientes: {e}', 'error')
+
+    # --- 2. NUEVO: OBTENER PAGOS YA REALIZADOS para la fecha de la cita ---
+    pagos_realizados = []
+    try:
+        response_pagados = supabase.table('pagos').select('*, citas!inner(nombre, motivo, fecha)') \
+            .eq('citas.fecha', filtro_fecha) \
+            .order('id', desc=True).execute()
+        
+        # # Imprimimos la respuesta cruda en la consola para inspeccionarla
+        # print("----------- DATOS CRUDOS DE SUPABASE (pagos realizados) -----------")
+        # print(response_pagados.data)
+        # print(f"----------- FILTRANDO POR FECHA: {filtro_fecha} -----------")
+
+        pagos_realizados = response_pagados.data
+    except Exception as e:
+        flash(f'❌ Error al cargar pagos realizados: {e}', 'error')
+    
+    # --- 3. NUEVO: CALCULAR TOTALES ---
+    total_pagado = sum(float(pago.get('monto', 0) or 0) for pago in pagos_realizados)
+    
+    total_pendiente = 0
+    for cita in citas_por_pagar:
+        clave_precio = f"precio_{cita.get('motivo', '')}"
+        precio_str = config.get(clave_precio, '0')
+        print(cita.get('fecha', 'N/A'))
+        try:
+            total_pendiente += float(precio_str or 0)
+        except (ValueError, TypeError):
+            # Ignora si el precio no es un número válido
+            pass
+    # =================================================================
+    # NUEVO: OBTENER IDs DE CITAS QUE YA TIENEN SEGUIMIENTO
+    # =================================================================
+    citas_con_seguimiento = set()
+    if pagos_realizados:
+        try:
+            # 1. Obtener la lista de IDs de las citas pagadas
+            ids_citas_pagadas = [pago['cita_id'] for pago in pagos_realizados]
+            
+            # 2. Consultar la tabla 'seguimiento' para ver cuáles de esos IDs ya existen
+            seguimientos = supabase.table('seguimiento').select('cita_id').in_('cita_id', ids_citas_pagadas).execute().data
+            
+            # 3. Crear un conjunto (set) con los IDs para una búsqueda rápida en el template
+            citas_con_seguimiento = {s['cita_id'] for s in seguimientos}
+        except Exception as e:
+            flash(f'❌ Error al verificar seguimientos: {e}', 'error')
+    # =================================================================
+
+    return render_template(
+        "admin_pagos.html", 
+        citas_por_pagar=citas_por_pagar, 
+        pagos_realizados=pagos_realizados, # <- Pasamos la nueva lista
+        total_pagado=total_pagado,         # <- Pasamos el nuevo total
+        total_pendiente=total_pendiente,   # <- Pasamos el nuevo total
+        configuracion=config,
+        filtro_fecha=filtro_fecha,
+        date=date,
+        servicios=servicios,
+        citas_con_seguimiento=citas_con_seguimiento, # <-- PASAMOS LA NUEVA VARIABLE
+        fechas_bloqueadas=[] # Inicializamos como lista vacía para evitar el error
+    )
+
+@app.route('/admin/seguimiento_paciente', methods=['POST'])
+@role_required('admin', 'secretaria') # Permitir a ambos roles
+def seguimiento_paciente():
+    try:
+        cita_original_id = request.form['cita_id']
+        necesita_cita = 'necesita_nueva_cita' in request.form
+
+        # --- Obtener datos de la cita original para reutilizarlos ---
+        cita_original = supabase.table("citas").select("*").eq("id", cita_original_id).single().execute().data
+        if not cita_original:
+            flash("❌ Error: No se encontró la cita original.", "error")
+            return redirect(request.referrer or url_for('admin_registrar_pago')) # Usamos la ruta correcta
+
+        paciente_nombre = cita_original.get('nombre')
+
+        if necesita_cita:
+            # --- CASO 1: Se necesita una nueva cita ---
+            nueva_fecha = request.form['nueva_fecha']
+            nueva_fecha_str = request.form['nueva_fecha']
+            # =================================================================
+            # INICIO DEL NUEVO BLOQUE DE VALIDACIÓN DE FECHA
+            # =================================================================
+            config = get_configuracion()
+
+            # 1. Validar si la fecha está bloqueada manualmente
+            fechas_bloqueadas_data = supabase.table("fechas_bloqueadas").select("fecha").execute().data
+            fechas_bloqueadas = {f["fecha"] for f in fechas_bloqueadas_data}
+            if nueva_fecha_str in fechas_bloqueadas:
+                flash(f"❌ Error: La fecha {nueva_fecha_str} está bloqueada. Por favor, elija otra.", "error")
+                return redirect(request.referrer)
+
+            # 2. Validar fines de semana según configuración
+            nueva_fecha_obj = datetime.strptime(nueva_fecha_str, '%Y-%m-%d').date()
+            if config.get('bloquear_sabados') == 'true' and nueva_fecha_obj.weekday() == 5:
+                flash("❌ Error: No se pueden agendar citas los sábados. Por favor, elija otra fecha.", "error")
+                return redirect(request.referrer)
+            if config.get('bloquear_domingos') == 'true' and nueva_fecha_obj.weekday() == 6:
+                flash("❌ Error: No se pueden agendar citas los domingos. Por favor, elija otra fecha.", "error")
+                return redirect(request.referrer)
+            
+            # =================================================================
+            # NUEVO: Bloque de validación para evitar doble agendamiento
+            # =================================================================
+            # Buscamos si ya existe una cita para el mismo paciente en la nueva fecha seleccionada.
+            cita_existente = supabase.table("citas") \
+                                     .select("id") \
+                                     .eq("nombre", paciente_nombre) \
+                                     .eq("fecha", nueva_fecha) \
+                                     .execute().data
+            
+            # Si la lista 'cita_existente' no está vacía, significa que se encontró un conflicto.
+            if cita_existente:
+                # Mostramos el mensaje de error solicitado en un "flash popup"
+                flash(f"❌ Error: '{paciente_nombre}' ya tiene una cita agendada para el {nueva_fecha}. Por favor, asigne la cita en otra fecha.", "error")
+                # Redirigimos de vuelta a la página de pagos sin hacer cambios.
+                return redirect(request.referrer or url_for('registrar_pago'))
+            # =================================================================
+            # FIN DEL BLOQUE DE VALIDACIÓN
+            # =================================================================
+
+            # Si el código llega hasta aquí, significa que no hay conflicto y podemos crear la cita.
+            nueva_cita_data = {
+                "nombre": paciente_nombre,
+                "telefono": cita_original.get('telefono'),
+                "email": cita_original.get('email', ''), 
+                "tanda": cita_original.get('tanda', ''),
+                "fecha": nueva_fecha,
+                "motivo": "ginecologica", # Un motivo por defecto, puede ser ajustado después
+                "numero_seguro_medico": cita_original.get('numero_seguro_medico'),
+                "nombre_seguro_medico": cita_original.get('nombre_seguro_medico'),
+                "pagado": False,
+                "fue_llamado": False
+            }
+            supabase.table("citas").insert(nueva_cita_data).execute()
+            
+            # Guardar registro en la tabla de seguimiento
+            supabase.table("seguimiento").insert({
+                "cita_id": cita_original_id,
+                "necesita_nueva_cita": True
+            }).execute()
+
+            flash(f"✅ Nueva cita de seguimiento para {paciente_nombre} agendada para el {nueva_fecha}.", "success")
+            
+            mensaje_telegram = (
+                f"🗓️ *Nueva Cita de Seguimiento Agendada*\n\n"
+                f"👤 *Paciente:* {paciente_nombre}\n"
+                f"➡️ *Próxima Cita:* {nueva_fecha}"
+            )
+            send_telegram_message(mensaje_telegram)
+
+        else:
+            # --- CASO 2: No se necesita nueva cita (sin cambios) ---
+            motivo = request.form['motivo_no_cita']
+            
+            supabase.table("seguimiento").insert({
+                "cita_id": cita_original_id,
+                "necesita_nueva_cita": False,
+                "motivo_no_cita": motivo
+            }).execute()
+
+            flash(f"✅ Seguimiento para {paciente_nombre} registrado: No necesita nueva cita.", "success")
+            
+            mensaje_telegram = (
+                f"👍 *Seguimiento Completado (Sin Cita Próxima)*\n\n"
+                f"👤 *Paciente:* {paciente_nombre}\n"
+                f"📝 *Motivo:* {motivo}"
+            )
+            send_telegram_message(mensaje_telegram)
+
+    except Exception as e:
+        flash(f"❌ Ocurrió un error al procesar el seguimiento: {e}", "error")
+
+    # Redirigir a la página anterior (la de pagos con el filtro de fecha)
+    return redirect(request.referrer or url_for('admin_registrar_pago'))
+
+@app.route("/admin/buscar_eliminar_cita", methods=["GET"])
+@role_required('admin')
+def buscar_eliminar_cita():
+    """
+    Página para buscar citas por fecha con el propósito de eliminarlas.
+    """
+    # 1. Obtener la fecha del filtro desde la URL (ej: /url?fecha=2023-10-27)
+    filtro_fecha = request.args.get("fecha")
+    citas = []
+
+    # 2. Si se proporcionó una fecha, buscar las citas correspondientes
+    if filtro_fecha:
+        try:
+            # Seleccionamos las citas para esa fecha, ordenadas como en el panel principal
+            response = supabase.table("citas") \
+                .select("*") \
+                .eq("fecha", filtro_fecha) \
+                .order("orden", desc=False) \
+                .execute()
+            citas = response.data
+        except Exception as e:
+            flash(f"❌ Error al buscar las citas: {e}", "error")
+
+    # 3. Renderizar la nueva plantilla, pasándole las citas encontradas y la fecha
+    return render_template("buscar_eliminar_cita.html", citas=citas, filtro_fecha=filtro_fecha)
+
+
+# --- MEJORA OPCIONAL PERO RECOMENDADA ---
+# Modificar la función existente `eliminar_cita` para una mejor experiencia de usuario.
+# En lugar de redirigir siempre al panel principal, la haremos redirigir a la página anterior.
+
+# Elimina o comenta tu función eliminar_cita actual y reemplázala con esta:
+
+@app.route("/admin/eliminar_cita/<int:id>", methods=["POST"])
+@role_required('admin') # Aseguramos que solo el admin pueda eliminar
+def eliminar_cita(id):
+    if "usuario" not in session:
+        flash("⚠️ Debes iniciar sesión para realizar esta acción.", "error")
+        return redirect(url_for("login"))
+        
+    try:
+        # --- PASO 1: Obtener los detalles de la cita ANTES de eliminarla ---
+        cita_a_eliminar = supabase.table("citas").select("*").eq("id", id).single().execute().data
+
+        # Si no se encuentra la cita (quizás ya fue eliminada), mostramos un error.
+        if not cita_a_eliminar:
+            flash("❌ La cita que intentas eliminar no fue encontrada.", "error")
+            return redirect(request.referrer or url_for("admin"))
+
+        # --- PASO 2: Proceder con la eliminación ---
+        supabase.table("citas").delete().eq("id", id).execute()
+
+        # --- PASO 3: Construir y enviar la notificación a Telegram ---
+        # Usamos .get() para evitar errores si algún campo estuviera vacío.
+        nombre_paciente = cita_a_eliminar.get('nombre', 'No especificado')
+        fecha_cita = cita_a_eliminar.get('fecha', 'No especificada')
+        motivo_cita = cita_a_eliminar.get('motivo', 'No especificado')
+        
+        # Formateamos el mensaje para que se vea bien en Telegram (con markdown)
+        mensaje_telegram = (
+            f"🗑️ *Cita Eliminada del Sistema*\n\n"
+            f"Se han borrado los datos de la siguiente cita:\n\n"
+            f"👤 *Paciente:* {nombre_paciente}\n"
+            f"🗓️ *Fecha:* {fecha_cita}\n"
+            f"📋 *Motivo:* {motivo_cita}\n\n"
+            f"Esta acción fue realizada por el usuario: *{session.get('usuario', 'Desconocido')}*"
+        )
+        
+        send_telegram_message(mensaje_telegram)
+        
+        # --- PASO 4: Mostrar el mensaje de éxito en la interfaz ---
+        flash("🗑️ Cita eliminada correctamente y notificación enviada.", "success")
+
+    except Exception as e:
+        flash(f"❌ Error al eliminar la cita: {e}", "error")
+
+    # Redirige al usuario a la página desde la que vino (la de búsqueda),
+    # o al panel de admin si no se puede determinar la página anterior.
+    return redirect(request.referrer or url_for("admin"))
+
+@app.route("/admin/buscar_eliminar_pago", methods=["GET"])
+@role_required('admin')
+def buscar_eliminar_pago():
+    """
+    Página para buscar pagos por rango de fechas y mostrarlos para su posible eliminación.
+    """
+    fecha_desde = request.args.get('fecha_desde')
+    fecha_hasta = request.args.get('fecha_hasta')
+    pagos = []
+
+    if fecha_desde and fecha_hasta:
+        try:
+            # La consulta une la tabla 'pagos' con 'citas' para obtener el nombre del paciente
+            response = supabase.table('pagos') \
+                .select('*, citas(nombre, fecha)') \
+                .gte('fecha_pago', fecha_desde) \
+                .lte('fecha_pago', fecha_hasta) \
+                .order('fecha_pago', desc=True) \
+                .execute()
+            pagos = response.data
+        except Exception as e:
+            flash(f'❌ Error al buscar los pagos: {e}', 'error')
+
+    return render_template(
+        'buscar_eliminar_pago.html',
+        pagos=pagos,
+        fecha_desde=fecha_desde,
+        fecha_hasta=fecha_hasta
+    )
+
+
+@app.route("/admin/eliminar_pago/<int:pago_id>", methods=["POST"])
+@role_required('admin')
+def eliminar_pago(pago_id):
+    """
+    Elimina un registro de pago, revierte el estado de la cita a 'no pagada'
+    y envía una notificación a Telegram.
+    """
+    try:
+        # --- PASO 1: Obtener todos los detalles del pago ANTES de eliminarlo ---
+        # Hacemos un 'join' con la tabla de citas para obtener también el nombre del paciente.
+        pago_a_eliminar = supabase.table("pagos") \
+                                 .select("*, citas(nombre, fecha)") \
+                                 .eq("id", pago_id) \
+                                 .single() \
+                                 .execute().data
+        
+        if not pago_a_eliminar:
+            flash("❌ El pago que intentas eliminar no fue encontrado.", "error")
+            return redirect(request.referrer or url_for('buscar_eliminar_pago'))
+
+        # --- PASO 2: Extraer la información para la notificación y la lógica ---
+        cita_id_asociada = pago_a_eliminar.get('cita_id')
+        monto_pago = pago_a_eliminar.get('monto', 0)
+        fecha_del_pago = pago_a_eliminar.get('fecha_pago', 'No especificada')
+        
+        # El nombre del paciente y la fecha de la cita vienen en un diccionario anidado
+        cita_info = pago_a_eliminar.get('citas', {})
+        nombre_paciente = cita_info.get('nombre', 'Desconocido')
+        
+        admin_usuario = session.get('usuario', 'Usuario Desconocido')
+
+        # --- PASO 3: Construir el mensaje de Telegram ---
+        mensaje_telegram = (
+            f"🗑️ *Pago Eliminado del Sistema*\n\n"
+            f"Se ha eliminado un registro de pago. La cita asociada ha sido marcada como 'No Pagada'.\n\n"
+            f"👤 *Paciente:* {nombre_paciente}\n"
+            f"💰 *Monto Eliminado:* RD$ {float(monto_pago):.2f}\n"
+            f"🗓️ *Fecha del Pago:* {fecha_del_pago}\n\n"
+            f"👨‍💻 *Acción realizada por:* {admin_usuario}"
+        )
+
+        # --- PASO 4: Ejecutar la lógica de eliminación en la base de datos ---
+        # Primero se elimina el pago
+        supabase.table("pagos").delete().eq("id", pago_id).execute()
+
+        # Luego se revierte el estado de la cita
+        if cita_id_asociada:
+            supabase.table("citas").update({"pagado": False}).eq("id", cita_id_asociada).execute()
+        
+        # --- PASO 5: Enviar la notificación y el mensaje de éxito ---
+        send_telegram_message(mensaje_telegram)
+        
+        flash("✅ Pago eliminado y notificación enviada. El estado de la cita fue revertido.", "success")
+
+    except Exception as e:
+        flash(f"❌ Error al eliminar el pago: {e}", "error")
+
+    # Redirige al usuario a la página desde la que vino (la de búsqueda)
+    return redirect(request.referrer or url_for('buscar_eliminar_pago'))
+
+@app.route("/admin/estadisticas", methods=["GET"])
+@role_required('admin')
+def estadisticas_citas():
+    """
+    Genera y muestra estadísticas de citas basadas en un rango de fechas.
+    """
+    fecha_desde = request.args.get('fecha_desde')
+    fecha_hasta = request.args.get('fecha_hasta')
+    
+    stats = {}
+    citas_data = []
+
+    if fecha_desde and fecha_hasta:
+        try:
+            # 1. Obtener todos los datos necesarios en una sola consulta
+            response = supabase.table('citas') \
+                .select('fecha, motivo') \
+                .gte('fecha', fecha_desde) \
+                .lte('fecha', fecha_hasta) \
+                .execute()
+            
+            citas_data = response.data
+
+            if citas_data:
+                # 2. Calcular las estadísticas en Python
+                total_citas = len(citas_data)
+
+                # a) Conteo por motivo de cita
+                motivos_count = {}
+                for cita in citas_data:
+                    motivo = cita.get('motivo', 'No especificado').replace('_', ' ').capitalize()
+                    motivos_count[motivo] = motivos_count.get(motivo, 0) + 1
+                
+                # b) Conteo por mes
+                meses_count = {}
+                # Nombres de los meses en español
+                nombres_meses = {
+                    1: "Enero", 2: "Febrero", 3: "Marzo", 4: "Abril", 5: "Mayo", 6: "Junio",
+                    7: "Julio", 8: "Agosto", 9: "Septiembre", 10: "Octubre", 11: "Noviembre", 12: "Diciembre"
+                }
+                for cita in citas_data:
+                    fecha_obj = datetime.strptime(cita['fecha'], '%Y-%m-%d')
+                    # Usamos 'YYYY-MM' como clave para ordenar correctamente
+                    mes_key = fecha_obj.strftime('%Y-%m')
+                    # Usamos un nombre legible para mostrar
+                    mes_display = f"{nombres_meses[fecha_obj.month]} {fecha_obj.year}"
+                    
+                    if mes_key not in meses_count:
+                        meses_count[mes_key] = {'nombre': mes_display, 'cantidad': 0}
+                    meses_count[mes_key]['cantidad'] += 1
+                
+                # c) Conteo por día de la semana
+                dias_semana_count = {
+                    0: {'nombre': 'Lunes', 'cantidad': 0},
+                    1: {'nombre': 'Martes', 'cantidad': 0},
+                    2: {'nombre': 'Miércoles', 'cantidad': 0},
+                    3: {'nombre': 'Jueves', 'cantidad': 0},
+                    4: {'nombre': 'Viernes', 'cantidad': 0},
+                    5: {'nombre': 'Sábado', 'cantidad': 0},
+                    6: {'nombre': 'Domingo', 'cantidad': 0}
+                }
+                for cita in citas_data:
+                    fecha_obj = datetime.strptime(cita['fecha'], '%Y-%m-%d')
+                    dia_index = fecha_obj.weekday() # Lunes=0, Domingo=6
+                    if dia_index in dias_semana_count:
+                        dias_semana_count[dia_index]['cantidad'] += 1
+
+                # 3. Empaquetar todo para la plantilla
+                stats = {
+                    'total_citas': total_citas,
+                    'por_motivo': sorted(motivos_count.items(), key=lambda item: item[1], reverse=True),
+                    'por_mes': sorted(list(meses_count.values()), key=lambda item: item['nombre']),
+                    'por_dia_semana': list(dias_semana_count.values())
+                }
+
+        except Exception as e:
+            flash(f'❌ Error al generar las estadísticas: {e}', 'error')
+
+    return render_template(
+        'estadisticas.html',
+        stats=stats,
+        fecha_desde=fecha_desde,
+        fecha_hasta=fecha_hasta
     )
 
 

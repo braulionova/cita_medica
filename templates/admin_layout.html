@@ -30,10 +30,23 @@
             <a href="{{ url_for('registrar_cita_admin') }}" class="block p-2 rounded hover:bg-gray-700 transition">➕ Nuevo Registro</a>
           </li>
           <li class="mb-2">
+            <a href="{{ url_for('admin_registrar_pago') }}" class="block p-2 rounded hover:bg-gray-700 transition">💰 Registrar Pago y Seguimiento</a>
+          </li>
+          <!-- <li class="mb-2">
             <a href="{{ url_for('registrar_pago') }}" class="block p-2 rounded hover:bg-gray-700 transition">💰 Registrar Pagos</a>
+          </li> -->
+          <!-- 👇 AÑADIR ESTA LÍNEA 👇 -->
+          <li class="mb-2">
+            <a href="{{ url_for('buscar_eliminar_cita') }}" class="block p-2 rounded hover:bg-gray-700 transition">🗑️ Eliminar Cita</a>
+          </li>
+          <li class="mb-2">
+            <a href="{{ url_for('buscar_eliminar_pago') }}" class="block p-2 rounded hover:bg-gray-700 transition">🔍 Eliminar Pago</a>
           </li>
           <li class="mb-1">
               <a href="{{ url_for('reporte_pagos') }}" class="block p-3 hover:bg-gray-700 rounded-md">📊 Reporte de Pagos</a>
+          </li>
+          <li class="mb-2">
+            <a href="{{ url_for('estadisticas_citas') }}" class="block p-2 rounded hover:bg-gray-700 transition">📈 Estadísticas de Citas</a>
           </li>
           <li class="mb-2">
             <a href="{{ url_for('gestion_usuarios') }}" class="block p-2 rounded hover:bg-gray-700 transition">👥 Gestionar Usuarios</a>

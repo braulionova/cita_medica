@@ -1,0 +1,108 @@
+<!-- templates/estadisticas.html -->
+{% extends 'admin_layout.html' %}
+
+{% block title %}Estadísticas de Citas{% endblock %}
+
+{% block content %}
+<div class="container mx-auto">
+  <h1 class="text-3xl font-bold mb-6 text-gray-800">Estadísticas de Citas</h1>
+
+  <!-- FORMULARIO DE FILTRO DE FECHAS -->
+  <div class="bg-white p-6 rounded-lg shadow-md mb-8">
+    <h2 class="text-xl font-semibold mb-4 text-gray-700">Seleccionar Rango de Fechas</h2>
+    <form method="GET" action="{{ url_for('estadisticas_citas') }}">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+        <div>
+          <label for="fecha_desde" class="block text-sm font-medium text-gray-600 mb-1">Desde:</label>
+          <input type="date" id="fecha_desde" name="fecha_desde" value="{{ fecha_desde or '' }}" required
+                 class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+        </div>
+        <div>
+          <label for="fecha_hasta" class="block text-sm font-medium text-gray-600 mb-1">Hasta:</label>
+          <input type="date" id="fecha_hasta" name="fecha_hasta" value="{{ fecha_hasta or '' }}" required
+                 class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+        </div>
+        <button type="submit" class="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded-md hover:bg-blue-700 transition duration-300">
+          Generar Reporte
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <!-- MOSTRAR ESTADÍSTICAS SI HAY DATOS -->
+  {% if stats %}
+  <div class="space-y-8">
+    <!-- Total de Citas -->
+    <div class="bg-white p-6 rounded-lg shadow-md text-center">
+      <h3 class="text-lg font-semibold text-gray-600">Total de Citas en el Período</h3>
+      <p class="text-5xl font-bold text-blue-600 mt-2">{{ stats.total_citas }}</p>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      
+      <!-- Distribución por Motivo de Cita -->
+      <div class="bg-white p-6 rounded-lg shadow-md">
+        <h3 class="text-xl font-semibold mb-4 text-gray-700">Citas por Motivo</h3>
+        <div class="space-y-4">
+          {% for motivo, cantidad in stats.por_motivo %}
+          <div>
+            <div class="flex justify-between items-center mb-1">
+              <span class="text-gray-600 font-medium">{{ motivo }}</span>
+              <span class="text-gray-800 font-bold">{{ cantidad }}</span>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-4">
+              <div class="bg-green-500 h-4 rounded-full" style="width: {{ (cantidad / stats.total_citas * 100)|round|int }}%"></div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- Distribución por Día de la Semana -->
+      <div class="bg-white p-6 rounded-lg shadow-md">
+        <h3 class="text-xl font-semibold mb-4 text-gray-700">Citas por Día de la Semana</h3>
+        <div class="space-y-4">
+          {% for dia in stats.por_dia_semana %}
+          <div>
+            <div class="flex justify-between items-center mb-1">
+              <span class="text-gray-600 font-medium">{{ dia.nombre }}</span>
+              <span class="text-gray-800 font-bold">{{ dia.cantidad }}</span>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-4">
+              <div class="bg-purple-500 h-4 rounded-full" style="width: {{ (dia.cantidad / stats.total_citas * 100)|round|int if stats.total_citas > 0 else 0 }}%"></div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Citas por Mes -->
+    <div class="bg-white p-6 rounded-lg shadow-md">
+      <h3 class="text-xl font-semibold mb-4 text-gray-700">Citas por Mes</h3>
+      <div class="space-y-4">
+        {% for mes in stats.por_mes %}
+        <div>
+          <div class="flex justify-between items-center mb-1">
+            <span class="text-gray-600 font-medium">{{ mes.nombre }}</span>
+            <span class="text-gray-800 font-bold">{{ mes.cantidad }}</span>
+          </div>
+          <div class="w-full bg-gray-200 rounded-full h-4">
+            <div class="bg-yellow-500 h-4 rounded-full" style="width: {{ (mes.cantidad / stats.total_citas * 100)|round|int }}%"></div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+  </div>
+  {% elif request.args.get('fecha_desde') %}
+    <!-- Mensaje si no se encontraron resultados para el rango seleccionado -->
+    <div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 rounded-md shadow-md" role="alert">
+      <p class="font-bold">Sin resultados</p>
+      <p>No se encontraron citas en el rango de fechas seleccionado. Por favor, intente con otro rango.</p>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,68 @@
+<!-- templates/buscar_eliminar_pago.html -->
+{% extends "admin_layout.html" %}
+
+{% block title %}Buscar y Eliminar Pagos{% endblock %}
+
+{% block content %}
+<div class="bg-white p-8 rounded-lg shadow-md max-w-4xl mx-auto">
+  <h1 class="text-2xl font-bold mb-6 text-gray-800 border-b pb-2">Buscar y Eliminar Pagos Realizados</h1>
+  <p class="text-gray-600 mb-6">Utiliza el formulario para encontrar pagos registrados en un rango de fechas específico. Solo los administradores pueden eliminar registros de pago.</p>
+
+  <!-- Formulario de Búsqueda -->
+  <form method="GET" action="{{ url_for('buscar_eliminar_pago') }}" class="mb-8 p-4 bg-gray-50 rounded-lg border">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+      <div>
+        <label for="fecha_desde" class="block text-sm font-medium text-gray-700 mb-1">Desde la fecha:</label>
+        <input type="date" id="fecha_desde" name="fecha_desde" value="{{ fecha_desde or '' }}" required class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+      </div>
+      <div>
+        <label for="fecha_hasta" class="block text-sm font-medium text-gray-700 mb-1">Hasta la fecha:</label>
+        <input type="date" id="fecha_hasta" name="fecha_hasta" value="{{ fecha_hasta or '' }}" required class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+      </div>
+      <button type="submit" class="w-full md:w-auto bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+        🔍 Buscar Pagos
+      </button>
+    </div>
+  </form>
+
+  <!-- Tabla de Resultados -->
+  {% if pagos is defined and pagos %}
+    <h2 class="text-xl font-semibold mb-4 text-gray-700">Resultados de la Búsqueda</h2>
+    <div class="overflow-x-auto">
+      <table class="min-w-full bg-white border">
+        <thead class="bg-gray-200">
+          <tr>
+            <th class="text-left py-3 px-4 uppercase font-semibold text-sm">Paciente</th>
+            <th class="text-left py-3 px-4 uppercase font-semibold text-sm">Fecha Cita</th>
+            <th class="text-left py-3 px-4 uppercase font-semibold text-sm">Fecha Pago</th>
+            <th class="text-left py-3 px-4 uppercase font-semibold text-sm">Monto</th>
+            <th class="text-center py-3 px-4 uppercase font-semibold text-sm">Acción</th>
+          </tr>
+        </thead>
+        <tbody class="text-gray-700">
+          {% for pago in pagos %}
+            <tr class="border-b hover:bg-gray-50">
+              <td class="py-3 px-4">{{ pago.citas.nombre }}</td>
+              <td class="py-3 px-4">{{ pago.citas.fecha }}</td>
+              <td class="py-3 px-4">{{ pago.fecha_pago }}</td>
+              <td class="py-3 px-4 font-mono">RD$ {{ "%.2f"|format(pago.monto|float) }}</td>
+              <td class="py-3 px-4 text-center">
+                <form action="{{ url_for('eliminar_pago', pago_id=pago.id) }}" method="POST" onsubmit="return confirm('¿Estás seguro de que deseas eliminar este pago de RD$ {{ "%.2f"|format(pago.monto|float) }}? Esta acción es irreversible y marcará la cita del paciente como NO PAGADA.');">
+                  <button type="submit" class="bg-red-600 text-white text-xs px-3 py-1 rounded-full hover:bg-red-700 transition">
+                    🗑️ Eliminar
+                  </button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% elif fecha_desde %}
+    <div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4" role="alert">
+      <p class="font-bold">Sin resultados</p>
+      <p>No se encontraron pagos en el rango de fechas seleccionado.</p>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,84 @@
+<!-- templates/buscar_eliminar_cita.html -->
+
+{% extends "admin_layout.html" %}
+
+{% block title %}Eliminar Cita por Fecha{% endblock %}
+
+{% block content %}
+<div class="bg-white p-8 rounded-lg shadow-md max-w-4xl mx-auto">
+  <h1 class="text-2xl font-bold mb-6 text-gray-800 border-b pb-4">Buscar y Eliminar Cita</h1>
+
+  <!-- Mensajes Flash -->
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, message in messages %}
+        <div class="p-4 mb-4 text-sm rounded-lg {% if category == 'error' %} bg-red-100 text-red-700 {% else %} bg-green-100 text-green-700 {% endif %}" role="alert">
+          {{ message }}
+        </div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+  
+  <!-- Formulario de Búsqueda por Fecha -->
+  <form method="GET" action="{{ url_for('buscar_eliminar_cita') }}" class="mb-8">
+    <div class="flex items-end space-x-4">
+      <div class="flex-grow">
+        <label for="fecha" class="block text-sm font-medium text-gray-700 mb-1">Seleccione una fecha:</label>
+        <!-- El valor se pre-rellena con la fecha actual del filtro -->
+        <input type="date" id="fecha" name="fecha" required value="{{ filtro_fecha if filtro_fecha }}" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+      </div>
+      <div>
+        <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block -mt-1 mr-1" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" />
+          </svg>
+          Buscar Citas
+        </button>
+      </div>
+    </div>
+  </form>
+
+  <!-- Tabla de Resultados -->
+  {% if filtro_fecha %}
+    {% if citas %}
+      <h2 class="text-xl font-semibold mb-4 text-gray-700">Citas para el {{ filtro_fecha }}</h2>
+      <div class="overflow-x-auto">
+        <table class="min-w-full bg-white border">
+          <thead class="bg-gray-200">
+            <tr>
+              <th class="py-2 px-4 border-b text-left">Orden</th>
+              <th class="py-2 px-4 border-b text-left">Nombre del Paciente</th>
+              <th class="py-2 px-4 border-b text-left">Motivo</th>
+              <th class="py-2 px-4 border-b text-left">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for cita in citas %}
+            <tr class="hover:bg-gray-50">
+              <td class="py-2 px-4 border-b">{{ loop.index }}</td>
+              <td class="py-2 px-4 border-b">{{ cita.nombre }}</td>
+              <td class="py-2 px-4 border-b">{{ cita.motivo }}</td>
+              <td class="py-2 px-4 border-b">
+                <!-- Cada botón de eliminar es su propio formulario -->
+                <form action="{{ url_for('eliminar_cita', id=cita.id) }}" method="POST" onsubmit="return confirm('¿Estás seguro de que deseas eliminar la cita de \'{{ cita.nombre }}\'? Esta acción no se puede deshacer.');">
+                  <button type="submit" class="bg-red-600 text-white px-3 py-1 text-sm rounded-md hover:bg-red-700 transition">
+                    Eliminar
+                  </button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4" role="alert">
+        <p class="font-bold">Sin resultados</p>
+        <p>No se encontraron citas agendadas para la fecha seleccionada.</p>
+      </div>
+    {% endif %}
+  {% else %}
+      <p class="text-center text-gray-500">Por favor, seleccione una fecha para comenzar la búsqueda.</p>
+  {% endif %}
+</div>
+{% endblock %}
