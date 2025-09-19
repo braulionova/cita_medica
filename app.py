@@ -15,6 +15,10 @@ import requests
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 
+ACCESS_TOKEN = os.getenv("WHATSAPP_ACCESS_TOKEN")
+PHONE_NUMBER_ID = os.getenv("PHONE_NUMBER_ID")
+WHATSAPP_API_URL = os.getenv("WHATSAPP_API_URL")
+
 
 def send_telegram_message(message):
     """Envía un mensaje al grupo de Telegram."""
@@ -25,6 +29,49 @@ def send_telegram_message(message):
         response.raise_for_status()
     except requests.exceptions.RequestException as e:
         print(f"Error al enviar mensaje a Telegram: {e}")
+
+def send_whatsapp_reminder(recipient_phone, patient_name, date_str):
+    """Envía un recordatorio de cita vía WhatsApp usando la API de WhatsApp Business."""
+    headers = {
+        "Authorization": f"Bearer {ACCESS_TOKEN}",
+        "Content-Type": "application/json"
+    }
+
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": recipient_phone,
+        "type": "template",
+        "template": {
+            "name": "cita_medica_registrada",  # nombre exacto de tu plantilla
+            "language": {
+            "code": "es_DO"
+            },
+            "components": [
+                {
+                    "type": "body",
+                    "parameters": [
+                        {"type": "text", "text": date_str},
+                        {"type": "text", "text": patient_name}
+                    ]
+                }
+            ]
+        }
+    }
+
+    #response = requests.post(url, headers=headers, json=payload)
+
+    #print("Status code:", response.status_code)
+    #print("Response:", json.dumps(response.json(), indent=2, ensure_ascii=False))
+    try:
+        response = requests.post(WHATSAPP_API_URL, headers=headers, json=payload, timeout=20)
+        response.raise_for_status()
+        print(f"✅ Recordatorio enviado a {patient_name} ({recipient_phone}). Status: {response.status_code}")
+        return True
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Error al enviar mensaje a {patient_name} ({recipient_phone}): {e}")
+        if e.response is not None:
+            print("Error detallado de la API:", e.response.json())
+        return False
 
 
 # Cargar variables de entorno
@@ -359,6 +406,9 @@ def registrar_cita():
                 "Numero de Seguro Médico": numero_seguro_medico,
                 "Nombre del seguro médico": nombre_seguro_medico
             }
+            #enviar mensaje a whatsapp
+            send_whatsapp_reminder(telefono, nombre, fecha)
+            #enviar mensaje de telegram
             send_telegram_message("Nueva cita registrada:\n" + "\n".join([f"{k}: {v}" for k, v in mensaje.items()]))
 
         except Exception as e:
