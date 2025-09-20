@@ -1,6 +1,7 @@
 import eventlet
 eventlet.monkey_patch()
 
+import json
 import os
 from flask import Flask, render_template, request, redirect, session, url_for, flash, Response, jsonify
 from supabase import create_client, Client
@@ -12,12 +13,16 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
 import requests
 
+
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 
-ACCESS_TOKEN = os.getenv("WHATSAPP_ACCESS_TOKEN")
+ACCESS_TOKEN = os.getenv("ACCESS_TOKEN")
 PHONE_NUMBER_ID = os.getenv("PHONE_NUMBER_ID")
 WHATSAPP_API_URL = os.getenv("WHATSAPP_API_URL")
+
+# Cargar variables de entorno
+load_dotenv()
 
 
 def send_telegram_message(message):
@@ -63,8 +68,16 @@ def send_whatsapp_reminder(recipient_phone, patient_name, date_str):
     #print("Status code:", response.status_code)
     #print("Response:", json.dumps(response.json(), indent=2, ensure_ascii=False))
     try:
-        response = requests.post(WHATSAPP_API_URL, headers=headers, json=payload, timeout=20)
-        response.raise_for_status()
+        #print(ACCESS_TOKEN)
+
+        url = f"https://graph.facebook.com/v22.0/{PHONE_NUMBER_ID}/messages"
+        response = requests.post(url, headers=headers, json=payload)
+
+        print("Status code:", response.status_code)
+        #print("Response:", json.dumps(response.json(), indent=2, ensure_ascii=False))
+        
+        #response = requests.post(f"https://graph.facebook.com/v22.0/{PHONE_NUMBER_ID}/messages", headers=headers, json=payload, timeout=20)
+        #response.raise_for_status()
         print(f"✅ Recordatorio enviado a {patient_name} ({recipient_phone}). Status: {response.status_code}")
         return True
     except requests.exceptions.RequestException as e:
@@ -72,10 +85,6 @@ def send_whatsapp_reminder(recipient_phone, patient_name, date_str):
         if e.response is not None:
             print("Error detallado de la API:", e.response.json())
         return False
-
-
-# Cargar variables de entorno
-load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = "novaglez"  # cambia por algo seguro en producción
