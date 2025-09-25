@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ doctora.nombre }} | Ginecología y Obstetricia</title>
+    
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    
+    <!-- Google Fonts (Poppins) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-light bg-light sticky-top shadow-sm">
+        <div class="container">
+            <a class="navbar-brand fw-bold" href="#">{{ doctora.nombre }}</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="#inicio">Inicio</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#servicios">Servicios</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#sobre-mi">Sobre Mí</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#contacto">Contacto</a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('registrar_cita') }}" class="btn btn-primary ms-lg-3">Agendar Cita</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section id="inicio" class="hero py-5">
+        <div class="container">
+            <div class="row align-items-center">
+                <div class="col-lg-6">
+                    <h1 class="display-4 fw-bold">{{ doctora.nombre }}</h1>
+                    <p class="lead text-secondary mb-4">{{ doctora.especialidades }}</p>
+                    <p>Comprometida con el cuidado integral de la salud femenina en todas las etapas de la vida, ofreciendo atención personalizada y de vanguardia.</p>
+                    <a href="{{ url_for('registrar_cita') }}" class="btn btn-primary btn-lg me-2">Agendar Cita Ahora</a>
+                    <a href="#contacto" class="btn btn-outline-primary btn-lg">Ver Contacto</a>
+                </div>
+                <div class="col-lg-6 text-center mt-4 mt-lg-0">
+                    <img src="{{ doctora.imagen_url }}" alt="Foto de {{ doctora.nombre }}" class="img-fluid rounded-circle shadow-lg profile-picture">
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Servicios Section -->
+    <section id="servicios" class="py-5 bg-light">
+        <div class="container">
+            <div class="text-center mb-5">
+                <h2 class="section-title">Mis Servicios</h2>
+                <p class="text-muted">Atención especializada para tu bienestar y salud.</p>
+            </div>
+            <div class="row">
+                <div class="col-md-6 col-lg-4 mb-4">
+                    <div class="card service-card h-100 text-center">
+                        <div class="card-body">
+                            <div class="icon-circle mb-3"><i class="bi bi-person-check-fill"></i></div>
+                            <h5 class="card-title">Ginecología General</h5>
+                            <p class="card-text">Consultas de rutina, Papanicolau, diagnóstico y tratamiento de afecciones ginecológicas.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6 col-lg-4 mb-4">
+                    <div class="card service-card h-100 text-center">
+                        <div class="card-body">
+                            <div class="icon-circle mb-3"><i class="bi bi-clipboard2-pulse-fill"></i></div>
+                            <h5 class="card-title">Obstetricia y Control Prenatal</h5>
+                            <p class="card-text">Seguimiento completo del embarazo para garantizar la salud de la madre y el bebé.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6 col-lg-4 mb-4">
+                    <div class="card service-card h-100 text-center">
+                        <div class="card-body">
+                            <div class="icon-circle mb-3"><i class="bi bi-bandaid-fill"></i></div>
+                            <h5 class="card-title">Mastología (Salud Mamaria)</h5>
+                            <p class="card-text">Prevención, diagnóstico y tratamiento de enfermedades de la mama, tanto benignas como malignas.</p>
+                        </div>
+                    </div>
+                </div>
+                 <div class="col-md-6 col-lg-4 mb-4">
+                    <div class="card service-card h-100 text-center">
+                        <div class="card-body">
+                            <div class="icon-circle mb-3"><i class="bi bi-hearts"></i></div>
+                            <h5 class="card-title">Planificación Familiar</h5>
+                            <p class="card-text">Asesoría sobre métodos anticonceptivos y salud reproductiva para tomar decisiones informadas.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6 col-lg-4 mb-4">
+                    <div class="card service-card h-100 text-center">
+                        <div class="card-body">
+                            <div class="icon-circle mb-3"><i class="bi bi-file-earmark-medical-fill"></i></div>
+                            <h5 class="card-title">Evaluación de Resultados</h5>
+                            <p class="card-text">Interpretación detallada de estudios y biopsias para definir los próximos pasos en tu tratamiento.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6 col-lg-4 mb-4">
+                    <div class="card service-card h-100 text-center">
+                        <div class="card-body">
+                            <div class="icon-circle mb-3"><i class="bi bi-calendar2-check-fill"></i></div>
+                            <h5 class="card-title">Seguimiento Post-Quirúrgico</h5>
+                            <p class="card-text">Cuidado y monitoreo post-operatorio para asegurar una recuperación óptima y segura.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Sobre Mí Section -->
+    <section id="sobre-mi" class="py-5">
+        <div class="container">
+             <div class="text-center mb-5">
+                <h2 class="section-title">Sobre Mí</h2>
+            </div>
+            <div class="row align-items-center">
+                <div class="col-lg-12">
+                    <p class="lead">Mi principal objetivo es ofrecer una medicina humana, ética y actualizada.</p>
+                    <p>Con una sólida formación en Ginecología, Obstetricia y Mastología, me dedico a proporcionar un cuidado exhaustivo de la salud de la mujer. Creo firmemente en la importancia de la prevención y la educación, empoderando a mis pacientes para que tomen un rol activo en su bienestar. Cada paciente es única, y mi enfoque se centra en crear un ambiente de confianza y respeto donde podamos abordar juntas cualquier inquietud.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Contacto Section -->
+    <section id="contacto" class="py-5 bg-light">
+        <div class="container">
+            <div class="text-center mb-5">
+                <h2 class="section-title">Contacto y Ubicación</h2>
+                <p class="text-muted">Estoy aquí para ayudarte. Ponte en contacto o visita mi consultorio.</p>
+            </div>
+            <div class="row">
+                <div class="col-lg-6 mb-4">
+                    <div class="contact-info p-4 bg-white rounded shadow-sm">
+                        <ul class="list-unstyled">
+                            <li class="d-flex align-items-start mb-3">
+                                <i class="bi bi-geo-alt-fill fs-4 me-3"></i>
+                                <div>
+                                    <strong>Dirección:</strong><br>{{ doctora.direccion }}
+                                </div>
+                            </li>
+                            <li class="d-flex align-items-start mb-3">
+                                <i class="bi bi-telephone-fill fs-4 me-3"></i>
+                                <div>
+                                    <strong>Teléfonos:</strong><br>
+                                    {{ doctora.telefono_movil }} (Móvil)<br>
+                                    {{ doctora.telefono_fijo }}
+                                </div>
+                            </li>
+                            <li class="d-flex align-items-start">
+                                <i class="bi bi-envelope-fill fs-4 me-3"></i>
+                                <div>
+                                    <strong>Email:</strong><br><a href="mailto:{{ doctora.email }}">{{ doctora.email }}</a>
+                                </div>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="col-lg-6">
+                    <div class="map-container rounded shadow-sm overflow-hidden">
+                        <iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3765.555458401104!2d-70.26117242510264!3d19.301688744849233!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x8eae2deecb7ba9e3%3A0x26a58ca302f42198!2sCentro%20M%C3%A9dico%20Siglo%2021!5e0!3m2!1ses-419!2sdo!4v1758833700782!5m2!1ses-419!2sdo" width="600" height="450" style="border:0;" allowfullscreen="" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="py-4 text-white text-center">
+        <div class="container">
+            <p class="mb-0">&copy; 2024 {{ doctora.nombre }}. Todos los derechos reservados.</p>
+            <p class="mb-0">Sitio web desarrollado con ❤️</p>
+        </div>
+    </footer>
+
+    <!-- Bootstrap 5 JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

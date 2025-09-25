@@ -285,8 +285,24 @@ def configuracion():
     config = get_configuracion()
     return render_template("configuracion.html", configuracion=config, servicios=servicios)
 
-
 @app.route("/", methods=["GET", "POST"])
+@public_route
+def pagina_principal():
+    # Datos extraídos de la imagen para pasarlos a la plantilla.
+    # Esto hace que sea más fácil de mantener que escribirlos directo en el HTML.
+    doctora_info = {
+        "nombre": "Dra. Jennifer Reyes M.",
+        "especialidades": "Ginecología-Obstetricia, Mastología",
+        "telefono_movil": "(829)-642-1564",
+        "telefono_fijo": "(809)-244-6300, Ext. 718",
+        "direccion": "Torre Ejecutiva Siglo 21, 5to. Nivel, Suite 501",
+        "email": "dra.jenniferreyes@hotmail.com",
+        "imagen_url": "/static/images/dra-jennifer-reyes.png" # Asegúrate de tener una imagen en esta ruta
+    }
+    # Renderiza la nueva plantilla 'index.html' y le pasa los datos.
+    return render_template("index.html", doctora=doctora_info)
+
+@app.route("/cita", methods=["GET", "POST"])
 @public_route
 def registrar_cita():
     config = get_configuracion()

@@ -1,0 +1,141 @@
+/* static/css/style.css */
+
+/* --- Variables Globales --- */
+:root {
+    --primary-color: #004d40; /* Verde oscuro, profesional y médico */
+    --secondary-color: #80cbc4; /* Verde menta claro para acentos */
+    --text-color: #333;
+    --light-bg: #f8f9fa;
+}
+
+/* --- Estilos Generales --- */
+body {
+    font-family: 'Poppins', sans-serif;
+    color: var(--text-color);
+    line-height: 1.7;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    font-weight: 600;
+}
+
+.btn-primary {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+    padding: 10px 25px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.btn-primary:hover {
+    background-color: #00382e;
+    border-color: #00382e;
+    transform: translateY(-2px);
+}
+
+.btn-outline-primary {
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+    padding: 10px 25px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.btn-outline-primary:hover {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+/* --- Navbar --- */
+.navbar-brand {
+    color: var(--primary-color) !important;
+}
+
+.nav-link {
+    font-weight: 500;
+}
+
+.nav-link.active {
+    color: var(--primary-color) !important;
+    font-weight: 700;
+}
+
+/* --- Hero Section --- */
+.hero {
+    background-color: white;
+}
+
+.profile-picture {
+    max-width: 350px;
+    height: 350px;
+    object-fit: cover;
+    border: 8px solid var(--light-bg);
+}
+
+/* --- Títulos de Sección --- */
+.section-title {
+    font-size: 2.5rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+    position: relative;
+    display: inline-block;
+}
+
+.section-title::after {
+    content: '';
+    display: block;
+    width: 60px;
+    height: 4px;
+    background-color: var(--primary-color);
+    margin: 10px auto 0;
+}
+
+
+/* --- Tarjetas de Servicios --- */
+.service-card {
+    border: none;
+    border-radius: 15px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.service-card:hover {
+    transform: translateY(-10px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+}
+
+.icon-circle {
+    width: 70px;
+    height: 70px;
+    background-color: var(--secondary-color);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto;
+    font-size: 2rem;
+}
+
+/* --- Sección de Contacto --- */
+.contact-info {
+    line-height: 1.8;
+}
+
+.contact-info i {
+    color: var(--primary-color);
+}
+
+.contact-info a {
+    color: var(--primary-color);
+    text-decoration: none;
+    font-weight: 600;
+}
+.contact-info a:hover {
+    text-decoration: underline;
+}
+
+/* --- Footer --- */
+footer {
+    background-color: var(--primary-color);
+}
