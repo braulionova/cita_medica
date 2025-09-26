@@ -5,6 +5,7 @@ import json
 import os
 from flask import Flask, render_template, request, redirect, session, url_for, flash, Response, jsonify
 from supabase import create_client, Client
+from postgrest.exceptions import APIError
 from dotenv import load_dotenv
 from datetime import datetime, date  # Importamos tanto datetime como date
 from queue import Queue, Empty # <-- Importa la clase Queue
@@ -12,6 +13,7 @@ from queue import Queue, Empty # <-- Importa la clase Queue
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
 import requests
+import re
 
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
@@ -36,6 +38,19 @@ def send_telegram_message(message):
         print(f"Error al enviar mensaje a Telegram: {e}")
 
 def send_whatsapp_reminder(recipient_phone, patient_name, date_str):
+    # --- INICIO DE LA MODIFICACIÓN ---
+    # Validamos y formateamos la fecha antes de enviarla.
+    # Se asume que 'date_str' llega en formato 'YYYY-MM-DD'.
+    try:
+        # 1. Convertir la cadena de texto a un objeto de fecha (datetime)
+        fecha_obj = datetime.strptime(date_str, '%Y-%m-%d')
+        # 2. Formatear ese objeto al nuevo formato 'DD-MM-YYYY'
+        fecha_formateada = fecha_obj.strftime('%d-%m-%Y')
+    except (ValueError, TypeError):
+        # Si por alguna razón la fecha no viene en el formato esperado,
+        # usamos la cadena original para no causar un error.
+        print(f"Advertencia: Formato de fecha inesperado ('{date_str}'). Se usará el valor original.")
+        fecha_formateada = date_str
     """Envía un recordatorio de cita vía WhatsApp usando la API de WhatsApp Business."""
     headers = {
         "Authorization": f"Bearer {ACCESS_TOKEN}",
@@ -55,7 +70,7 @@ def send_whatsapp_reminder(recipient_phone, patient_name, date_str):
                 {
                     "type": "body",
                     "parameters": [
-                        {"type": "text", "text": date_str},
+                        {"type": "text", "text": fecha_formateada},
                         {"type": "text", "text": patient_name}
                     ]
                 }
@@ -302,158 +317,315 @@ def pagina_principal():
     # Renderiza la nueva plantilla 'index.html' y le pasa los datos.
     return render_template("index.html", doctora=doctora_info)
 
+#registra cita 
 @app.route("/cita", methods=["GET", "POST"])
 @public_route
 def registrar_cita():
+    # --- Configuración inicial ---
     config = get_configuracion()
-    
-    # --- OBTENER FECHAS NO DISPONIBLES (BLOQUEADAS + LLENAS) ---
+
+    # --- Fechas bloqueadas manualmente ---
     try:
         fechas_bloqueadas_data = supabase.table("fechas_bloqueadas").select("fecha").execute().data
         fechas_bloqueadas_manualmente = {f["fecha"] for f in fechas_bloqueadas_data}
     except Exception as e:
-        # ... (código de manejo de error)
+        print(f"Error al obtener fechas bloqueadas: {e}")
         fechas_bloqueadas_manualmente = set()
 
+    # --- Días llenos por configuración ---
     dias_llenos = set(get_dias_llenos(config))
-    # Combinamos ambas listas para pasarlas al frontend
+
+    # --- Unificar todas las fechas no disponibles ---
     fechas_no_disponibles = list(fechas_bloqueadas_manualmente.union(dias_llenos))
 
+    # --- Si el usuario envía el formulario (POST) ---
     if request.method == "POST":
         fecha_str = request.form["fecha"]
-        fecha_obj = datetime.strptime(fecha_str, '%Y-%m-%d').date()
+        try:
+            fecha_obj = datetime.strptime(fecha_str, '%Y-%m-%d').date()
+        except ValueError:
+            flash("❌ La fecha seleccionada no es válida.", "error")
+            return redirect(url_for("registrar_cita"))
 
-        # VALIDACIÓN 1: Fin de semana
+        # --- Validaciones de fechas ---
         if config.get('bloquear_sabados') == 'true' and fecha_obj.weekday() == 5:
             flash("❌ No se pueden agendar citas los sábados.", "error")
-            return render_template("form.html", 
-                                fechas_bloqueadas=fechas_bloqueadas,
-                                dias_llenos=dias_llenos,
-                                configuracion=config,
-                                form_data=request.form)
+            return redirect(url_for("registrar_cita"))
+
         if config.get('bloquear_domingos') == 'true' and fecha_obj.weekday() == 6:
             flash("❌ No se pueden agendar citas los domingos.", "error")
-            return render_template("form.html", 
-                                fechas_bloqueadas=fechas_bloqueadas,
-                                dias_llenos=dias_llenos,
-                                configuracion=config,
-                                form_data=request.form)
-            
-        # VALIDACIÓN 2: Fecha bloqueada manualmente
+            return redirect(url_for("registrar_cita"))
+
         if fecha_str in fechas_bloqueadas_manualmente:
             flash("❌ La fecha seleccionada no está disponible. Por favor, elija otra.", "error")
-            return render_template("form.html", 
-                                fechas_bloqueadas=fechas_bloqueadas,
-                                dias_llenos=dias_llenos,
-                                configuracion=config,
-                                form_data=request.form)
-
-        # VALIDACIÓN 3: Límite de pacientes por día
-        if fecha_str in dias_llenos:
-             flash("❌ El cupo para la fecha seleccionada está lleno. Por favor, elija otra.", "error")
-             return render_template("form.html", 
-                                fechas_bloqueadas=fechas_bloqueadas,
-                                dias_llenos=dias_llenos,
-                                configuracion=config,
-                                form_data=request.form)
-    # Traer fechas bloqueadas
-    try:
-        fechas_bloqueadas_data = supabase.table("fechas_bloqueadas").select("fecha").execute().data
-        # Extraer solo las fechas en formato 'YYYY-MM-DD'
-        fechas_bloqueadas = [f["fecha"] for f in fechas_bloqueadas_data]
-    except Exception as e:
-        print(f"Error al obtener fechas bloqueadas: {e}")
-        fechas_bloqueadas = [] # Si hay un error, usa una lista vacía para no romper la página
-
-    config = get_configuracion() # <-- Obtener configuración
-    try:
-        fechas_bloqueadas_data = supabase.table("fechas_bloqueadas").select("fecha").execute().data
-        fechas_bloqueadas = [f["fecha"] for f in fechas_bloqueadas_data]
-    except Exception as e:
-        print(f"Error al obtener fechas bloqueadas: {e}")
-        fechas_bloqueadas = []
-
-    if request.method == "POST":
-        fecha_str = request.form["fecha"]
-        fecha_obj = datetime.strptime(fecha_str, '%Y-%m-%d')
-        
-        # --- VALIDACIÓN DE FINES DE SEMANA ---
-        # weekday(): Lunes=0, Martes=1, ..., Sábado=5, Domingo=6
-        if config.get('bloquear_sabados') == 'true' and fecha_obj.weekday() == 5:
-            flash("❌ No se pueden agendar citas los sábados.", "error")
             return redirect(url_for("registrar_cita"))
-        if config.get('bloquear_domingos') == 'true' and fecha_obj.weekday() == 6:
-            flash("❌ No se pueden agendar citas los domingos.", "error")
+
+        if fecha_str in dias_llenos:
+            flash("❌ El cupo para la fecha seleccionada está lleno. Por favor, elija otra.", "error")
+            return redirect(url_for("registrar_cita"))
+
+        # --- Recolección de datos del formulario ---
+        cedula_raw = request.form.get("cedula", "").strip()
+        nombre = request.form["nombre"].strip()
+        telefono = request.form["telefono"].strip()
+        motivo = request.form["motivo"].strip()
+        nombre_seguro_medico = request.form["nombre_seguro_medico"].strip()
+        numero_seguro_medico = request.form["numero_seguro_medico"].strip()
+
+         # --- VALIDAR FORMATO DE CÉDULA ---
+        if cedula_raw:
+            if not re.match(r"^\d{3}-\d{7}-\d{1}$", cedula_raw):
+              flash("❌ El formato de la cédula no es válido. Use 000-0000000-0", "error")
+              return redirect(url_for("registrar_cita"))
+              
+
+        # --- Validación de datos del paciente ---
+        if not nombre:
+            flash("❌ El nombre del paciente es obligatorio.", "error")
             return redirect(url_for("registrar_cita"))
             
-        if fecha_str in fechas_bloqueadas:
-            flash("❌ La fecha seleccionada no está disponible. Por favor, elija otra.", "error")
+        if not telefono:
+            flash("❌ El teléfono del paciente es obligatorio.", "error")
             return redirect(url_for("registrar_cita"))
-
-    if request.method == "POST":
-        fecha = request.form["fecha"]
-        # La validación en el backend sigue siendo crucial como medida de seguridad
-        if fecha in fechas_bloqueadas:
-            flash("❌ La fecha seleccionada no está disponible. Por favor, elija otra.", "error")
+            
+        if not fecha_str:
+            flash("❌ La fecha de la cita es obligatoria.", "error")
+            return redirect(url_for("registrar_cita"))
+            
+        # Validar formato del teléfono (debe tener al menos 10 dígitos)
+        telefono_limpio = re.sub(r'[^0-9]', '', telefono)
+        if len(telefono_limpio) < 10:
+            flash("❌ El número de teléfono debe tener al menos 10 dígitos.", "error")
             return redirect(url_for("registrar_cita"))
         
-        # ... (resto del código POST sin cambios)
-        nombre = request.form["nombre"]
-        telefono = request.form["telefono"]
-        email = "" 
-        motivo = request.form["motivo"]
-        tanda = ""
-        numero_seguro_medico = request.form["numero_seguro_medico"]
-        nombre_seguro_medico = request.form["nombre_seguro_medico"]
-        tipo_seguro_medico = ""
+        # --- Guardar/actualizar paciente ---
+        try:
+            paciente_data = {
+                "nombre_completo": nombre,
+                "telefono": telefono,
+                "nombre_seguro_medico": nombre_seguro_medico,
+                "numero_seguro_medico": numero_seguro_medico
+            }
+            # Si hay cédula, la agregamos al diccionario
+            if cedula_raw:
+                paciente_data["cedula"] = cedula_raw
+                # Usar upsert cuando hay cédula
+                supabase.table("pacientes").upsert(paciente_data, on_conflict="cedula").execute()
+            else:
+                # Buscar si ya existe un paciente con el mismo nombre y teléfono
+                existing_patient = supabase.table("pacientes").select("*").eq("nombre_completo", nombre).eq("telefono", telefono).execute()
+                if existing_patient.data:
+                    # Actualizar el paciente existente
+                    supabase.table("pacientes").update(paciente_data).eq("nombre_completo", nombre).eq("telefono", telefono).execute()
+                else:
+                    # Crear nuevo paciente
+                    supabase.table("pacientes").insert(paciente_data).execute()
+        except Exception as e:
+            print(f"⚠️ No se pudo guardar/actualizar paciente: {e}")
+            # Si hay un error de permisos, continuar con el registro de la cita
+            if isinstance(e, APIError) and e.json()['code'] == '42501':
+                print("Continuando con el registro de la cita a pesar del error de permisos...")
 
-        data = {
+        # --- Registrar cita ---
+        data_cita = {
             "nombre": nombre,
             "telefono": telefono,
-            "email": "",
-            "fecha": fecha,
+            "email": "",  # opcional
+            "fecha": fecha_str,
             "motivo": motivo,
-            "tanda": tanda,
+            "tanda": "",
             "numero_seguro_medico": numero_seguro_medico,
             "nombre_seguro_medico": nombre_seguro_medico,
-            "tipo_seguro_medico": tipo_seguro_medico
+            "tipo_seguro_medico": "",
+            "cedula": cedula_raw if cedula_raw else None
         }
-        
+
         try:
-            supabase.table("citas").insert(data).execute()
+            supabase.table("citas").insert(data_cita).execute()
             flash("✅ Cita registrada correctamente", "success")
-            #enviar mensaje a telegram
+
+            # --- Notificaciones ---
             mensaje = {
                 "Nombre del paciente": nombre,
-                "Telefono": telefono,
-                "Fecha": fecha,
+                "Teléfono": telefono,
+                "Fecha": fecha_str,
                 "Motivo": motivo,
-                "Numero de Seguro Médico": numero_seguro_medico,
-                "Nombre del seguro médico": nombre_seguro_medico
+                "Número de Seguro Médico": numero_seguro_medico,
+                "Nombre del Seguro Médico": nombre_seguro_medico
             }
-            #enviar mensaje a whatsapp
-            send_whatsapp_reminder(telefono, nombre, fecha)
-            #enviar mensaje de telegram
-            send_telegram_message("Nueva cita registrada:\n" + "\n".join([f"{k}: {v}" for k, v in mensaje.items()]))
+
+            send_whatsapp_reminder(telefono, nombre, fecha_str)
+            send_telegram_message("📅 Nueva cita registrada:\n" + "\n".join([f"{k}: {v}" for k, v in mensaje.items()]))
 
         except Exception as e:
             flash(f"❌ Error al registrar la cita: {e}", "error")
             print(f"Error en Supabase: {e}")
-            # En caso de error, renderizamos el formulario nuevamente con los datos
-            return render_template("form.html", 
-                                fechas_bloqueadas=fechas_bloqueadas, 
-                                dias_llenos=dias_llenos,
-                                configuracion=config,
-                                form_data=request.form)  # Mantenemos los datos del formulario
-            
-        # Solo redirigimos si la cita se registró correctamente
-        #flash("✅ Cita registrada correctamente", "success")
+            return render_template("form.html",
+                                   fechas_bloqueadas=fechas_no_disponibles,
+                                   dias_llenos=list(dias_llenos),
+                                   configuracion=config,
+                                   form_data=request.form)
+
         return redirect(url_for("registrar_cita"))
+
+    # --- Si es GET, renderizamos el formulario ---
+    return render_template("form.html",
+                           fechas_bloqueadas=fechas_no_disponibles,
+                           dias_llenos=list(dias_llenos),
+                           configuracion=config)
+
+# @app.route("/cita", methods=["GET", "POST"])
+# @public_route
+# def registrar_cita():
+#     config = get_configuracion()
     
-    # Si es GET, renderiza la plantilla y pasa la lista de fechas y la configuración
-    config = get_configuracion()
-    dias_llenos = get_dias_llenos()  # Obtiene los días que están llenos usando la función existente
-    return render_template("form.html", fechas_bloqueadas=fechas_bloqueadas, dias_llenos=dias_llenos, configuracion=config)
+#     # --- OBTENER FECHAS NO DISPONIBLES (BLOQUEADAS + LLENAS) ---
+#     try:
+#         fechas_bloqueadas_data = supabase.table("fechas_bloqueadas").select("fecha").execute().data
+#         fechas_bloqueadas_manualmente = {f["fecha"] for f in fechas_bloqueadas_data}
+#     except Exception as e:
+#         # ... (código de manejo de error)
+#         fechas_bloqueadas_manualmente = set()
+
+#     dias_llenos = set(get_dias_llenos(config))
+#     # Combinamos ambas listas para pasarlas al frontend
+#     fechas_no_disponibles = list(fechas_bloqueadas_manualmente.union(dias_llenos))
+
+#     if request.method == "POST":
+#         fecha_str = request.form["fecha"]
+#         fecha_obj = datetime.strptime(fecha_str, '%Y-%m-%d').date()
+
+#         # VALIDACIÓN 1: Fin de semana
+#         if config.get('bloquear_sabados') == 'true' and fecha_obj.weekday() == 5:
+#             flash("❌ No se pueden agendar citas los sábados.", "error")
+#             return render_template("form.html", 
+#                                 fechas_bloqueadas=fechas_bloqueadas,
+#                                 dias_llenos=dias_llenos,
+#                                 configuracion=config,
+#                                 form_data=request.form)
+#         if config.get('bloquear_domingos') == 'true' and fecha_obj.weekday() == 6:
+#             flash("❌ No se pueden agendar citas los domingos.", "error")
+#             return render_template("form.html", 
+#                                 fechas_bloqueadas=fechas_bloqueadas,
+#                                 dias_llenos=dias_llenos,
+#                                 configuracion=config,
+#                                 form_data=request.form)
+            
+#         # VALIDACIÓN 2: Fecha bloqueada manualmente
+#         if fecha_str in fechas_bloqueadas_manualmente:
+#             flash("❌ La fecha seleccionada no está disponible. Por favor, elija otra.", "error")
+#             return render_template("form.html", 
+#                                 fechas_bloqueadas=fechas_bloqueadas,
+#                                 dias_llenos=dias_llenos,
+#                                 configuracion=config,
+#                                 form_data=request.form)
+
+#         # VALIDACIÓN 3: Límite de pacientes por día
+#         if fecha_str in dias_llenos:
+#              flash("❌ El cupo para la fecha seleccionada está lleno. Por favor, elija otra.", "error")
+#              return render_template("form.html", 
+#                                 fechas_bloqueadas=fechas_bloqueadas,
+#                                 dias_llenos=dias_llenos,
+#                                 configuracion=config,
+#                                 form_data=request.form)
+#     # Traer fechas bloqueadas
+#     try:
+#         fechas_bloqueadas_data = supabase.table("fechas_bloqueadas").select("fecha").execute().data
+#         # Extraer solo las fechas en formato 'YYYY-MM-DD'
+#         fechas_bloqueadas = [f["fecha"] for f in fechas_bloqueadas_data]
+#     except Exception as e:
+#         print(f"Error al obtener fechas bloqueadas: {e}")
+#         fechas_bloqueadas = [] # Si hay un error, usa una lista vacía para no romper la página
+
+#     config = get_configuracion() # <-- Obtener configuración
+#     try:
+#         fechas_bloqueadas_data = supabase.table("fechas_bloqueadas").select("fecha").execute().data
+#         fechas_bloqueadas = [f["fecha"] for f in fechas_bloqueadas_data]
+#     except Exception as e:
+#         print(f"Error al obtener fechas bloqueadas: {e}")
+#         fechas_bloqueadas = []
+
+#     if request.method == "POST":
+#         fecha_str = request.form["fecha"]
+#         fecha_obj = datetime.strptime(fecha_str, '%Y-%m-%d')
+        
+#         # --- VALIDACIÓN DE FINES DE SEMANA ---
+#         # weekday(): Lunes=0, Martes=1, ..., Sábado=5, Domingo=6
+#         if config.get('bloquear_sabados') == 'true' and fecha_obj.weekday() == 5:
+#             flash("❌ No se pueden agendar citas los sábados.", "error")
+#             return redirect(url_for("registrar_cita"))
+#         if config.get('bloquear_domingos') == 'true' and fecha_obj.weekday() == 6:
+#             flash("❌ No se pueden agendar citas los domingos.", "error")
+#             return redirect(url_for("registrar_cita"))
+            
+#         if fecha_str in fechas_bloqueadas:
+#             flash("❌ La fecha seleccionada no está disponible. Por favor, elija otra.", "error")
+#             return redirect(url_for("registrar_cita"))
+
+#     if request.method == "POST":
+#         fecha = request.form["fecha"]
+#         # La validación en el backend sigue siendo crucial como medida de seguridad
+#         if fecha in fechas_bloqueadas:
+#             flash("❌ La fecha seleccionada no está disponible. Por favor, elija otra.", "error")
+#             return redirect(url_for("registrar_cita"))
+        
+#         # ... (resto del código POST sin cambios)
+#         nombre = request.form["nombre"]
+#         telefono = request.form["telefono"]
+#         email = "" 
+#         motivo = request.form["motivo"]
+#         tanda = ""
+#         numero_seguro_medico = request.form["numero_seguro_medico"]
+#         nombre_seguro_medico = request.form["nombre_seguro_medico"]
+#         tipo_seguro_medico = ""
+
+#         data = {
+#             "nombre": nombre,
+#             "telefono": telefono,
+#             "email": "",
+#             "fecha": fecha,
+#             "motivo": motivo,
+#             "tanda": tanda,
+#             "numero_seguro_medico": numero_seguro_medico,
+#             "nombre_seguro_medico": nombre_seguro_medico,
+#             "tipo_seguro_medico": tipo_seguro_medico
+#         }
+        
+#         try:
+#             supabase.table("citas").insert(data).execute()
+#             flash("✅ Cita registrada correctamente", "success")
+#             #enviar mensaje a telegram
+#             mensaje = {
+#                 "Nombre del paciente": nombre,
+#                 "Telefono": telefono,
+#                 "Fecha": fecha,
+#                 "Motivo": motivo,
+#                 "Numero de Seguro Médico": numero_seguro_medico,
+#                 "Nombre del seguro médico": nombre_seguro_medico
+#             }
+#             #enviar mensaje a whatsapp
+#             send_whatsapp_reminder(telefono, nombre, fecha)
+#             #enviar mensaje de telegram
+#             send_telegram_message("Nueva cita registrada:\n" + "\n".join([f"{k}: {v}" for k, v in mensaje.items()]))
+
+#         except Exception as e:
+#             flash(f"❌ Error al registrar la cita: {e}", "error")
+#             print(f"Error en Supabase: {e}")
+#             # En caso de error, renderizamos el formulario nuevamente con los datos
+#             return render_template("form.html", 
+#                                 fechas_bloqueadas=fechas_bloqueadas, 
+#                                 dias_llenos=dias_llenos,
+#                                 configuracion=config,
+#                                 form_data=request.form)  # Mantenemos los datos del formulario
+            
+#         # Solo redirigimos si la cita se registró correctamente
+#         #flash("✅ Cita registrada correctamente", "success")
+#         return redirect(url_for("registrar_cita"))
+    
+#     # Si es GET, renderiza la plantilla y pasa la lista de fechas y la configuración
+#     config = get_configuracion()
+#     dias_llenos = get_dias_llenos()  # Obtiene los días que están llenos usando la función existente
+#     return render_template("form.html", fechas_bloqueadas=fechas_bloqueadas, dias_llenos=dias_llenos, configuracion=config)
 
 # 👇 Formulario para bloquear fechas (VERSIÓN CORREGIDA)
 @app.route("/bloquear", methods=["GET", "POST"])
@@ -2112,6 +2284,143 @@ def estadisticas_citas():
         fecha_desde=fecha_desde,
         fecha_hasta=fecha_hasta
     )
+
+# @app.route('/api/buscar_paciente/<string:cedula>')
+# @public_route
+# def buscar_paciente(cedula):
+#     """
+#     API endpoint para buscar un paciente por su cédula.
+#     Implementa una búsqueda en cascada y auto-promoción de datos:
+#     1. Busca en la tabla 'pacientes' (fuente principal).
+#     2. Si no lo encuentra, busca la última cita en la tabla 'citas'.
+#     3. Si encuentra datos en 'citas', los guarda en 'pacientes' y luego los devuelve.
+#     """
+#     try:
+#         # --- PASO 1: Buscar primero en la tabla 'pacientes' ---
+#         try:
+#             paciente_response = supabase.table("pacientes").select("*").eq("cedula", cedula).single().execute()
+#             if paciente_response.data:
+#                 print(f"Paciente con cédula {cedula} encontrado directamente en 'pacientes'.")
+#                 return jsonify(paciente_response.data)
+#         except Exception as e:
+#             if "no rows" in str(e).lower():
+#                 # Este es un caso normal - el paciente simplemente no existe en la tabla
+#                 print(f"No se encontró el paciente con cédula {cedula} en 'pacientes'.")
+#             else:
+#                 # Solo registramos otros tipos de errores que podrían ser problemas reales
+#                 print(f"Error al buscar en 'pacientes': {e}")
+
+#         # --- PASO 2: Si no se encuentra, buscar en 'citas' como respaldo ---
+#         print(f"Cédula {cedula} no encontrada en 'pacientes'. Buscando en 'citas'...")
+#         cita_response = supabase.table("citas") \
+#             .select("nombre, telefono, nombre_seguro_medico, numero_seguro_medico") \
+#             .eq("cedula", cedula) \
+#             .order("id", desc=True) \
+#             .limit(1) \
+#             .execute()
+
+#         if cita_response.data:
+#             print(f"Datos de respaldo encontrados para {cedula} en 'citas'.")
+#             cita_data = cita_response.data[0]
+            
+#             # Preparamos el diccionario de datos con el formato de la tabla 'pacientes'
+#             datos_para_paciente = {
+#                 "cedula": cedula,
+#                 "nombre_completo": cita_data.get("nombre"),
+#                 "telefono": cita_data.get("telefono"),
+#                 "nombre_seguro_medico": cita_data.get("nombre_seguro_medico"),
+#                 "numero_seguro_medico": cita_data.get("numero_seguro_medico")
+#             }
+
+#             # --- PASO 3 (NUEVO): "Promover" los datos a la tabla 'pacientes' ---
+#             # Intentamos guardar esta información en la tabla maestra.
+#             try:
+#                 print(f"Promoviendo datos de {cedula} a la tabla 'pacientes'...")
+#                 supabase.table("pacientes").upsert(datos_para_paciente, on_conflict="cedula").execute()
+#                 print(f"Datos de {cedula} guardados exitosamente en 'pacientes'.")
+#             except Exception as e:
+#                 # Si falla el guardado, no es crítico. La prioridad es devolver los datos
+#                 # al usuario. Registramos el error y continuamos.
+#                 print(f"ADVERTENCIA: No se pudo promover al paciente {cedula} a la tabla 'pacientes'. Error: {e}")
+
+#             # Devolvemos los datos encontrados para el autocompletado en el frontend.
+#             return jsonify(datos_para_paciente)
+
+#         # --- PASO 4: Si no se encuentra en ninguna tabla ---
+#         print(f"No se encontraron datos para la cédula {cedula} en ninguna tabla.")
+#         return jsonify({}), 404
+
+#     except Exception as e:
+#         print(f"Error CRÍTICO al buscar paciente por cédula '{cedula}': {e}")
+#         return jsonify({"error": str(e)}), 500
+
+@app.route('/api/buscar_paciente/<string:cedula>')
+@public_route
+def buscar_paciente(cedula):
+    """
+    API endpoint para buscar un paciente por su cédula.
+    Implementa una búsqueda en cascada y auto-promoción de datos de forma segura.
+    """
+    try:
+        # --- PASO 1: Buscar primero en la tabla 'pacientes' ---
+        try:
+            paciente_response = supabase.table("pacientes").select("*").eq("cedula", cedula).execute()
+            if paciente_response.data and len(paciente_response.data) > 0:
+                print(f"Paciente con cédula {cedula} encontrado directamente en 'pacientes'.")
+                return jsonify(paciente_response.data[0])
+        except Exception as e:
+            print(f"No se encontró el paciente con cédula {cedula} en 'pacientes': {e}")
+
+        # --- PASO 2: Si no se encuentra, buscar en 'citas' como respaldo ---
+        print(f"Cédula {cedula} no encontrada en 'pacientes'. Buscando en 'citas'...")
+        cita_response = supabase.table("citas") \
+            .select("nombre, telefono, nombre_seguro_medico, numero_seguro_medico") \
+            .eq("cedula", cedula) \
+            .order("id", desc=True) \
+            .limit(1) \
+            .execute()
+
+        if cita_response.data:
+            print(f"Datos de respaldo encontrados para {cedula} en 'citas'.")
+            cita_data = cita_response.data[0]
+            
+            datos_para_paciente = {
+                "cedula": cedula,
+                "nombre_completo": cita_data.get("nombre"),
+                "telefono": cita_data.get("telefono"),
+                "nombre_seguro_medico": cita_data.get("nombre_seguro_medico"),
+                "numero_seguro_medico": cita_data.get("numero_seguro_medico")
+            }
+
+            # --- PASO 3 (CORREGIDO): "Promover" los datos llamando a la función RPC ---
+            try:
+                print(f"Promoviendo datos de {cedula} a la tabla 'pacientes' vía RPC...")
+                
+                params_for_rpc = {
+                    'p_cedula': datos_para_paciente['cedula'],
+                    'p_nombre_completo': datos_para_paciente['nombre_completo'],
+                    'p_telefono': datos_para_paciente['telefono'],
+                    'p_nombre_seguro_medico': datos_para_paciente['nombre_seguro_medico'],
+                    'p_numero_seguro_medico': datos_para_paciente['numero_seguro_medico']
+                }
+                
+                # Llama a la función de base de datos usando RPC (Remote Procedure Call)
+                supabase.rpc('upsert_paciente_from_public', params_for_rpc).execute()
+                
+                print(f"Datos de {cedula} guardados exitosamente en 'pacientes'.")
+            except Exception as e:
+                print(f"ADVERTENCIA: No se pudo promover al paciente {cedula}. Error RPC: {e}")
+
+            # Devolvemos los datos encontrados para el autocompletado.
+            return jsonify(datos_para_paciente)
+
+        # --- PASO 4: Si no se encuentra en ninguna tabla ---
+        print(f"No se encontraron datos para la cédula {cedula} en ninguna tabla.")
+        return jsonify({}), 404
+
+    except Exception as e:
+        print(f"Error CRÍTICO al buscar paciente por cédula '{cedula}': {e}")
+        return jsonify({"error": str(e)}), 500
 
 
 if __name__ == "__main__":

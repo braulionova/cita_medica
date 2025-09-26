@@ -27,17 +27,6 @@
 
     <form method="POST" class="space-y-4">
       
-      <!-- Cédula con Máscara y Autocompletado -->
-      <div>
-        <label for="cedula" class="block text-gray-700 mb-1 text-sm sm:text-base">Cédula de Identidad (Opcional)</label>
-        <input type="text" id="cedula" name="cedula"
-          placeholder="000-0000000-0"
-          pattern="^\d{3}-\d{7}-\d{1}$"
-          title="Formato requerido: 000-0000000-0"
-          class="w-full px-3 sm:px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm sm:text-base">
-        <p class="text-xs text-gray-500 mt-1">Si ya se ha registrado, sus datos se cargarán al salir del campo.</p>
-      </div>
-
       <!-- Nombre -->
       <div>
         <label for="nombre" class="block text-gray-700 mb-1 text-sm sm:text-base">Nombre completo</label>
@@ -101,75 +90,26 @@
     </form>
   </div>
 
-    <!-- POP-UP DE ERROR -->
+
+  <!-- INICIO: POP-UP DE ERROR -->
   <div id="error-popup" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-    <div class="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full text-center">
-      <p id="popup-message" class="text-gray-800 mb-4 text-sm sm:text-base"></p>
-      <button id="close-popup-btn"
-        class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 text-sm sm:text-base">
-        Cerrar
+    <div class="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm text-center">
+      <svg class="mx-auto h-12 w-12 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+      </svg>
+      <h3 class="text-lg font-bold text-gray-800 mt-4">Fecha no disponible</h3>
+      <p id="popup-message" class="text-gray-600 my-2 text-sm sm:text-base"></p>
+      <button id="close-popup-btn" class="mt-4 w-full bg-red-600 text-white py-2 px-4 rounded-lg hover:bg-red-700 transition">
+        Entendido
       </button>
     </div>
   </div>
+  <!-- FIN: POP-UP DE ERROR -->
 
-  <!-- SCRIPT UNIFICADO: MÁSCARA, AUTOCOMPLETADO Y VALIDACIÓN DE FECHA -->
+
+  <!-- INICIO: SCRIPT DE VALIDACIÓN CON MENSAJES ESPECÍFICOS -->
   <script>
-    document.addEventListener('DOMContentLoaded', function () {
-      // --- Elementos del DOM ---
-      const cedulaInput = document.getElementById('cedula');
-      const nombreInput = document.getElementById('nombre');
-      const telefonoInput = document.getElementById('telefono');
-      const nombreSeguroInput = document.getElementById('nombre_seguro_medico');
-      const numeroSeguroInput = document.getElementById('numero_seguro_medico');
-
-      // --- 1. LÓGICA PARA LA MÁSCARA DE CÉDULA ---
-      cedulaInput.addEventListener('input', function (e) {
-        // Eliminar todo lo que no sea dígito
-        let value = e.target.value.replace(/\D/g, '');
-        
-        // Limitar a 11 dígitos
-        value = value.slice(0, 11);
-        
-        // Aplicar formato con guiones
-        if (value.length >= 3) {
-          value = value.slice(0, 3) + '-' + value.slice(3);
-        }
-        if (value.length >= 11) {
-          value = value.slice(0, 11) + '-' + value.slice(11);
-        }
-        
-        e.target.value = value;
-      });
-
-      // --- 2. LÓGICA PARA AUTOCOMPLETAR DATOS ---
-      cedulaInput.addEventListener('blur', async function() {
-          const cedula = this.value.trim();
-          // Solo buscar si la cédula tiene el formato completo (13 caracteres: 11 dígitos + 2 guiones)
-          if (cedula.length !== 13) return;
-
-          try {
-              const response = await fetch(`/api/buscar_paciente/${cedula}`);
-              
-              if (response.ok) {
-                  const paciente = await response.json();
-                  // Rellenar campos si el paciente es encontrado
-                  nombreInput.value = paciente.nombre_completo || '';
-                  telefonoInput.value = paciente.telefono || '';
-                  nombreSeguroInput.value = paciente.nombre_seguro_medico || '';
-                  numeroSeguroInput.value = paciente.numero_seguro_medico || '';
-              } else {
-                  // Si no se encuentra (404), limpiar los campos para un nuevo registro
-                  // (excepto nombre si el usuario ya lo había escrito)
-                  // Esto evita borrar datos si el usuario se equivoca de cédula
-                  console.log('Paciente no encontrado, listo para nuevo registro.');
-              }
-          } catch (error) {
-              console.error('Error al buscar el paciente:', error);
-          }
-      });
-    });
-
-    // --- 3. LÓGICA PARA LA VALIDACIÓN DE FECHA (SIN CAMBIOS) ---
+    // Recibimos las listas y configuración desde Flask
     const blockedDates = {{ fechas_bloqueadas|tojson }};
     const fullDates = {{ dias_llenos|tojson }}; 
     const config = {{ configuracion|tojson }};
@@ -178,17 +118,21 @@
     const errorPopup = document.getElementById('error-popup');
     const popupMessage = document.getElementById('popup-message');
     const closePopupButton = document.getElementById('close-popup-btn');
+    const form = document.querySelector('form');
 
+    // Establecer la fecha mínima como hoy
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const formattedToday = today.toISOString().split('T')[0];
     dateInput.min = formattedToday;
 
+    // Función para formatear la fecha como DD/MM/YYYY
     function formatDate(dateString) {
         const [year, month, day] = dateString.split('-');
         return `${day}/${month}/${year}`;
     }
 
+    // Función para verificar si una fecha está llena
     function isDayFull(dateString) {
         return fullDates.includes(dateString);
     }
@@ -202,36 +146,45 @@
       errorPopup.classList.add('hidden');
     }
 
+    // Validar fecha cuando cambie
     dateInput.addEventListener('change', function() {
+  
       const selectedDate = this.value;
       if (!selectedDate) return;
 
       const dateObj = new Date(selectedDate + 'T00:00:00');
+      dateObj.setHours(0, 0, 0, 0);
       const dayOfWeek = dateObj.getDay();
       let errorMessage = '';
       
+      // Validaciones en orden de prioridad
       if (dateObj < today) {
         errorMessage = 'No se pueden agendar citas en fechas pasadas.';
       }
+      // Validación de fin de semana
       else if (config.bloquear_sabados === 'true' && dayOfWeek === 6) {
         errorMessage = 'No se agendan citas los sábados. Por favor, elija otro día.';
       } 
       else if (config.bloquear_domingos === 'true' && dayOfWeek === 0) {
         errorMessage = 'No se agendan citas los domingos. Por favor, elija otro día.';
       } 
+      // Validación de días llenos
       else if (isDayFull(selectedDate)) {
-        errorMessage = `Lo sentimos, el día ${formatDate(selectedDate)} ha alcanzado el límite de citas.`;
+        errorMessage = `Lo sentimos, el día ${formatDate(selectedDate)} ha alcanzado el límite de citas disponibles. Por favor, seleccione otra fecha.`;
       }
+      // Validación de fechas bloqueadas manualmente
       else if (blockedDates.includes(selectedDate)) {
-        errorMessage = `La fecha ${formatDate(selectedDate)} no está disponible.`;
+        errorMessage = `La fecha ${formatDate(selectedDate)} no está disponible para citas. Por favor, seleccione otra fecha.`;
       }
 
+      // Si se encontró algún error, mostrar el pop-up y limpiar el campo
       if (errorMessage) {
         showPopup(errorMessage);
-        this.value = '';
+        this.value = ''; // Limpiar la selección inválida
       }
     });
 
+    // Listeners para cerrar el pop-up (sin cambios)
     closePopupButton.addEventListener('click', hidePopup);
     errorPopup.addEventListener('click', function(event) {
       if (event.target === event.currentTarget) {
@@ -239,6 +192,7 @@
       }
     });
   </script>
+  <!-- FIN: SCRIPT DE VALIDACIÓN -->
 
 </body>
 </html>
