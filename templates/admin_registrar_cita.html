@@ -5,7 +5,7 @@
 
 {% block content %}
 <div class="bg-white p-6 sm:p-8 rounded-2xl shadow-xl w-full max-w-2xl mx-auto">
-    <h2 class="text-xl sm:text-2xl font-bold mb-6 text-center text-gray-800">📝 Registrar Nueva Cita (Admin)</h2>
+    <h2 class="text-xl sm:text-2xl font-bold mb-6 text-center text-gray-800">📝 Registrar Nueva Cita (Secretaria)</h2>
     <p class="text-center text-sm text-yellow-700 bg-yellow-100 p-3 rounded-lg mb-6">
       <strong>Atención:</strong> Este formulario no tiene límite de citas por día y solo debe ser usado por personal autorizado.
     </p>
@@ -26,6 +26,18 @@
     {% endwith %}
 
     <form method="POST" class="space-y-4">
+      
+      <!-- INICIO: CAMPO DE CÉDULA AÑADIDO -->
+      <div>
+        <label for="cedula" class="block text-gray-700 mb-1 text-sm sm:text-base">Cédula de Identidad (Opcional)</label>
+        <input type="text" id="cedula" name="cedula"
+          placeholder="000-0000000-0"
+          pattern="^\d{3}-\d{7}-\d{1}$"
+          title="Formato requerido: 000-0000000-0"
+          class="w-full px-3 sm:px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm sm:text-base">
+        <p class="text-xs text-gray-500 mt-1">Si el paciente ya está registrado, sus datos se cargarán al salir del campo.</p>
+      </div>
+      <!-- FIN: CAMPO DE CÉDULA AÑADIDO -->
       
       <!-- Nombre -->
       <div>
@@ -91,27 +103,60 @@
 </div>
 
 
-<!-- INICIO: POP-UP DE ERROR -->
+<!-- POP-UP DE ERROR (para validación de fechas) -->
 <div id="error-popup" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-    <!-- El contenido del pop-up es idéntico al original -->
-    <div class="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm text-center">
-      <svg class="mx-auto h-12 w-12 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-      </svg>
-      <h3 class="text-lg font-bold text-gray-800 mt-4">Fecha no disponible</h3>
-      <p id="popup-message" class="text-gray-600 my-2 text-sm sm:text-base"></p>
-      <button id="close-popup-btn" class="mt-4 w-full bg-red-600 text-white py-2 px-4 rounded-lg hover:bg-red-700 transition">
-        Entendido
+    <div class="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full text-center">
+      <p id="popup-message" class="text-gray-800 mb-4 text-sm sm:text-base"></p>
+      <button id="close-popup-btn"
+        class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 text-sm sm:text-base">
+        Cerrar
       </button>
     </div>
 </div>
-<!-- FIN: POP-UP DE ERROR -->
+<!-- FIN POP-UP -->
 
 
-<!-- El SCRIPT de validación es idéntico. Funcionará sin límites porque la ruta de Python le pasa 'dias_llenos' como una lista vacía. -->
+<!-- INICIO: SCRIPT UNIFICADO -->
 <script>
+document.addEventListener('DOMContentLoaded', function () {
+    // --- Elementos del DOM ---
+    const cedulaInput = document.getElementById('cedula');
+    const nombreInput = document.getElementById('nombre');
+    const telefonoInput = document.getElementById('telefono');
+    const nombreSeguroInput = document.getElementById('nombre_seguro_medico');
+    const numeroSeguroInput = document.getElementById('numero_seguro_medico');
+
+    // --- 1. LÓGICA PARA LA MÁSCARA DE CÉDULA ---
+    cedulaInput.addEventListener('input', function (e) {
+        let value = e.target.value.replace(/\D/g, '').slice(0, 11);
+        if (value.length > 3) value = value.slice(0, 3) + '-' + value.slice(3);
+        if (value.length > 11) value = value.slice(0, 11) + '-' + value.slice(11);
+        e.target.value = value;
+    });
+
+    // --- 2. LÓGICA PARA AUTOCOMPLETAR DATOS ---
+    cedulaInput.addEventListener('blur', async function() {
+        const cedula = this.value.trim();
+        if (cedula.length !== 13) return; // Solo buscar con formato completo
+        try {
+            const response = await fetch(`/api/buscar_paciente/${cedula}`);
+            if (response.ok) {
+                const paciente = await response.json();
+                nombreInput.value = paciente.nombre_completo || '';
+                telefonoInput.value = paciente.telefono || '';
+                nombreSeguroInput.value = paciente.nombre_seguro_medico || '';
+                numeroSeguroInput.value = paciente.numero_seguro_medico || '';
+            } else {
+                console.log('Paciente no encontrado, listo para nuevo registro.');
+            }
+        } catch (error) {
+            console.error('Error al buscar el paciente:', error);
+        }
+    });
+
+    // --- 3. LÓGICA PARA LA VALIDACIÓN DE FECHA ---
     const blockedDates = {{ fechas_bloqueadas|tojson }};
-    const fullDates = {{ dias_llenos|tojson }}; // ESTO RECIBIRÁ [] DE FLASK
+    const fullDates = {{ dias_llenos|tojson }}; // ESTO RECIBIRÁ [] DE FLASK, POR ESO NO HAY LÍMITES
     const config = {{ configuracion|tojson }};
 
     const dateInput = document.getElementById('fecha');
@@ -129,10 +174,9 @@
     }
 
     function isDayFull(dateString) {
-        return fullDates.includes(dateString); // Esto siempre será falso
+        return fullDates.includes(dateString); // Esto siempre será falso en esta página
     }
-    
-    // El resto del script es exactamente igual que en el formulario público...
+
     function showPopup(message) {
       popupMessage.textContent = message;
       errorPopup.classList.remove('hidden');
@@ -150,22 +194,23 @@
       const dayOfWeek = dateObj.getDay();
       let errorMessage = '';
       
-      if (new Date(selectedDate) < today) {
+      // La validación de fechas pasadas se mantiene
+      if (dateObj < today) {
         errorMessage = 'No se pueden agendar citas en fechas pasadas.';
       }
+      // Se advierte sobre fines de semana pero no se limpia el campo
       else if (config.bloquear_sabados === 'true' && dayOfWeek === 6) {
         errorMessage = 'Recordatorio: Los sábados están marcados como no laborables en la configuración.';
-        // No limpiamos el campo, solo advertimos
       } 
       else if (config.bloquear_domingos === 'true' && dayOfWeek === 0) {
         errorMessage = 'Recordatorio: Los domingos están marcados como no laborables en la configuración.';
-        // No limpiamos el campo, solo advertimos
       } 
+      // Las fechas bloqueadas manualmente sí se respetan
       else if (blockedDates.includes(selectedDate)) {
         errorMessage = `La fecha ${formatDate(selectedDate)} está bloqueada manualmente y no se puede usar.`;
         this.value = ''; // Limpiar la selección inválida
       }
-      // NO HAY CHECKEO DE isDayFull() aquí
+      // El chequeo de isDayFull() aquí no tendrá efecto, que es lo que queremos.
       
       if (errorMessage) {
         showPopup(errorMessage);
@@ -176,6 +221,8 @@
     errorPopup.addEventListener('click', (event) => {
       if (event.target === event.currentTarget) hidePopup();
     });
+});
 </script>
+<!-- FIN: SCRIPT UNIFICADO -->
 
 {% endblock %}

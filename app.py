@@ -1661,6 +1661,76 @@ def secretaria_registrar_pago():
         servicios=servicios
     )
 
+# @app.route("/admin/registrar_cita_admin", methods=["GET", "POST"])
+# @role_required('admin', 'secretaria') # Protegemos para que solo admin y secretaria puedan acceder
+# def registrar_cita_admin():
+#     config = get_configuracion()
+    
+#     # Obtenemos las fechas bloqueadas manualmente, ya que esas sí deben respetarse
+#     try:
+#         fechas_bloqueadas_data = supabase.table("fechas_bloqueadas").select("fecha").execute().data
+#         fechas_bloqueadas = [f["fecha"] for f in fechas_bloqueadas_data]
+#     except Exception as e:
+#         print(f"Error al obtener fechas bloqueadas para admin: {e}")
+#         fechas_bloqueadas = []
+
+#     if request.method == "POST":
+#         fecha_str = request.form["fecha"]
+#         fecha_obj = datetime.strptime(fecha_str, '%Y-%m-%d').date()
+
+#         # --- VALIDACIÓN DE BACKEND (SIN LÍMITE DE PACIENTES) ---
+#         # 1. Validar fines de semana según configuración
+#         if config.get('bloquear_sabados') == 'true' and fecha_obj.weekday() == 5:
+#             flash("⚠️ La configuración actual bloquea los sábados, pero se permite el registro.", "error") # Advertencia en lugar de error
+#         if config.get('bloquear_domingos') == 'true' and fecha_obj.weekday() == 6:
+#             flash("⚠️ La configuración actual bloquea los domingos, pero se permite el registro.", "error") # Advertencia
+
+#         # 2. Validar si la fecha está bloqueada manualmente
+#         if fecha_str in fechas_bloqueadas:
+#             flash(f"❌ La fecha {fecha_str} está bloqueada manualmente y no se puede registrar la cita.", "error")
+#             return redirect(url_for("registrar_cita_admin"))
+
+#         # 3. SE OMITE LA VALIDACIÓN DE 'dias_llenos'. ¡Esta es la clave!
+
+#         # --- Procesar y guardar la cita (lógica existente) ---
+#         nombre = request.form["nombre"]
+#         telefono = request.form["telefono"]
+#         motivo = request.form["motivo"]
+#         numero_seguro_medico = request.form["numero_seguro_medico"]
+#         nombre_seguro_medico = request.form["nombre_seguro_medico"]
+
+#         data = {
+#             "nombre": nombre, "telefono": telefono, "fecha": fecha_str,
+#             "motivo": motivo, "numero_seguro_medico": numero_seguro_medico,
+#             "nombre_seguro_medico": nombre_seguro_medico,
+#             # Campos opcionales o con valores por defecto
+#             "email": "", "tanda": "", "tipo_seguro_medico": ""
+#         }
+        
+#         try:
+#             supabase.table("citas").insert(data).execute()
+#             flash("✅ Cita registrada correctamente desde el panel de administración.", "success")
+#             # Opcional: Enviar notificación a Telegram
+#             mensaje = (f"Nueva cita registrada (Admin):\n"
+#                        f"Nombre: {nombre}\nTeléfono: {telefono}\nFecha: {fecha_str}\n"
+#                        f"Motivo: {motivo}\nSeguro: {nombre_seguro_medico} ({numero_seguro_medico})")
+#             send_telegram_message(mensaje)
+#         except Exception as e:
+#             flash(f"❌ Error al registrar la cita: {e}", "error")
+
+#         return redirect(url_for("registrar_cita_admin"))
+
+#     # --- LÓGICA PARA GET ---
+#     # Renderizamos el nuevo template. La clave es pasar una lista vacía para 'dias_llenos'.
+#     return render_template(
+#         "admin_registrar_cita.html", 
+#         fechas_bloqueadas=fechas_bloqueadas, 
+#         dias_llenos=[],  # <-- ¡AQUÍ ESTÁ LA MAGIA! El script no bloqueará ningún día por estar lleno.
+#         configuracion=config
+#     )
+
+# EN app.py
+
 @app.route("/admin/registrar_cita_admin", methods=["GET", "POST"])
 @role_required('admin', 'secretaria') # Protegemos para que solo admin y secretaria puedan acceder
 def registrar_cita_admin():
@@ -1679,53 +1749,85 @@ def registrar_cita_admin():
         fecha_obj = datetime.strptime(fecha_str, '%Y-%m-%d').date()
 
         # --- VALIDACIÓN DE BACKEND (SIN LÍMITE DE PACIENTES) ---
-        # 1. Validar fines de semana según configuración
         if config.get('bloquear_sabados') == 'true' and fecha_obj.weekday() == 5:
-            flash("⚠️ La configuración actual bloquea los sábados, pero se permite el registro.", "error") # Advertencia en lugar de error
+            flash("⚠️ La configuración actual bloquea los sábados, pero se permite el registro.", "warning")
         if config.get('bloquear_domingos') == 'true' and fecha_obj.weekday() == 6:
-            flash("⚠️ La configuración actual bloquea los domingos, pero se permite el registro.", "error") # Advertencia
+            flash("⚠️ La configuración actual bloquea los domingos, pero se permite el registro.", "warning")
 
-        # 2. Validar si la fecha está bloqueada manualmente
         if fecha_str in fechas_bloqueadas:
             flash(f"❌ La fecha {fecha_str} está bloqueada manualmente y no se puede registrar la cita.", "error")
             return redirect(url_for("registrar_cita_admin"))
 
-        # 3. SE OMITE LA VALIDACIÓN DE 'dias_llenos'. ¡Esta es la clave!
+        # --- INICIO DE LA MODIFICACIÓN ---
+        # Recolectamos todos los datos del formulario, incluyendo la cédula
+        cedula_raw = request.form.get("cedula", "").strip()
+        nombre = request.form["nombre"].strip()
+        telefono = request.form["telefono"].strip()
+        motivo = request.form["motivo"].strip()
+        nombre_seguro_medico = request.form["nombre_seguro_medico"].strip()
+        numero_seguro_medico = request.form["numero_seguro_medico"].strip()
 
-        # --- Procesar y guardar la cita (lógica existente) ---
-        nombre = request.form["nombre"]
-        telefono = request.form["telefono"]
-        motivo = request.form["motivo"]
-        numero_seguro_medico = request.form["numero_seguro_medico"]
-        nombre_seguro_medico = request.form["nombre_seguro_medico"]
+        # Validaciones básicas
+        if not nombre or not telefono or not fecha_str or not motivo:
+            flash("❌ Nombre, teléfono, fecha y motivo son campos obligatorios.", "error")
+            return redirect(url_for("registrar_cita_admin"))
 
-        data = {
+        # Lógica para guardar/actualizar paciente (reutilizada del formulario público)
+        try:
+            paciente_data = {
+                "nombre_completo": nombre,
+                "telefono": telefono,
+                "nombre_seguro_medico": nombre_seguro_medico,
+                "numero_seguro_medico": numero_seguro_medico
+            }
+            if cedula_raw:
+                paciente_data["cedula"] = cedula_raw
+                supabase.table("pacientes").upsert(paciente_data, on_conflict="cedula").execute()
+            else:
+                # Si no hay cédula, podemos buscar por nombre y teléfono para evitar duplicados
+                existing = supabase.table("pacientes").select("id").eq("nombre_completo", nombre).eq("telefono", telefono).execute()
+                if existing.data:
+                    supabase.table("pacientes").update(paciente_data).eq("id", existing.data[0]['id']).execute()
+                else:
+                    supabase.table("pacientes").insert(paciente_data).execute()
+        except Exception as e:
+            print(f"⚠️ Error al guardar/actualizar paciente desde el panel de admin: {e}")
+            flash("⚠️ Hubo un problema al guardar los datos maestros del paciente, pero la cita se registrará igualmente.", "warning")
+        
+        # Preparar datos para la tabla de citas
+        data_cita = {
             "nombre": nombre, "telefono": telefono, "fecha": fecha_str,
             "motivo": motivo, "numero_seguro_medico": numero_seguro_medico,
             "nombre_seguro_medico": nombre_seguro_medico,
-            # Campos opcionales o con valores por defecto
+            "cedula": cedula_raw if cedula_raw else None, # Guardar la cédula
             "email": "", "tanda": "", "tipo_seguro_medico": ""
         }
         
         try:
-            supabase.table("citas").insert(data).execute()
+            supabase.table("citas").insert(data_cita).execute()
             flash("✅ Cita registrada correctamente desde el panel de administración.", "success")
-            # Opcional: Enviar notificación a Telegram
-            mensaje = (f"Nueva cita registrada (Admin):\n"
-                       f"Nombre: {nombre}\nTeléfono: {telefono}\nFecha: {fecha_str}\n"
-                       f"Motivo: {motivo}\nSeguro: {nombre_seguro_medico} ({numero_seguro_medico})")
+            
+            # Notificación a Telegram mejorada
+            mensaje = (f"📝 Nueva cita registrada (Admin/Secretaria):\n"
+                       f"Nombre: {nombre}\n"
+                       f"Teléfono: {telefono}\n"
+                       f"Cédula: {cedula_raw or 'No provista'}\n"
+                       f"Fecha: {fecha_str}\n"
+                       f"Motivo: {motivo}\n"
+                       f"Seguro: {nombre_seguro_medico or 'No provisto'}")
             send_telegram_message(mensaje)
+
         except Exception as e:
             flash(f"❌ Error al registrar la cita: {e}", "error")
+        # --- FIN DE LA MODIFICACIÓN ---
 
         return redirect(url_for("registrar_cita_admin"))
 
-    # --- LÓGICA PARA GET ---
-    # Renderizamos el nuevo template. La clave es pasar una lista vacía para 'dias_llenos'.
+    # --- LÓGICA PARA GET (sin cambios) ---
     return render_template(
         "admin_registrar_cita.html", 
         fechas_bloqueadas=fechas_bloqueadas, 
-        dias_llenos=[],  # <-- ¡AQUÍ ESTÁ LA MAGIA! El script no bloqueará ningún día por estar lleno.
+        dias_llenos=[],
         configuracion=config
     )
 
@@ -1766,11 +1868,12 @@ def registrar_cita_secretaria():
         motivo = request.form["motivo"]
         numero_seguro_medico = request.form["numero_seguro_medico"]
         nombre_seguro_medico = request.form["nombre_seguro_medico"]
+        cedula = request.form.get("cedula", "")  # Obtener la cédula, si está vacía será ""
 
         data = {
             "nombre": nombre, "telefono": telefono, "fecha": fecha_str,
             "motivo": motivo, "numero_seguro_medico": numero_seguro_medico,
-            "nombre_seguro_medico": nombre_seguro_medico,
+            "nombre_seguro_medico": nombre_seguro_medico, "cedula": cedula,
             # Campos opcionales o con valores por defecto
             "email": "", "tanda": "", "tipo_seguro_medico": ""
         }
@@ -2290,25 +2393,17 @@ def estadisticas_citas():
 # def buscar_paciente(cedula):
 #     """
 #     API endpoint para buscar un paciente por su cédula.
-#     Implementa una búsqueda en cascada y auto-promoción de datos:
-#     1. Busca en la tabla 'pacientes' (fuente principal).
-#     2. Si no lo encuentra, busca la última cita en la tabla 'citas'.
-#     3. Si encuentra datos en 'citas', los guarda en 'pacientes' y luego los devuelve.
+#     Implementa una búsqueda en cascada y auto-promoción de datos de forma segura.
 #     """
 #     try:
 #         # --- PASO 1: Buscar primero en la tabla 'pacientes' ---
 #         try:
-#             paciente_response = supabase.table("pacientes").select("*").eq("cedula", cedula).single().execute()
-#             if paciente_response.data:
+#             paciente_response = supabase.table("pacientes").select("*").eq("cedula", cedula).execute()
+#             if paciente_response.data and len(paciente_response.data) > 0:
 #                 print(f"Paciente con cédula {cedula} encontrado directamente en 'pacientes'.")
-#                 return jsonify(paciente_response.data)
+#                 return jsonify(paciente_response.data[0])
 #         except Exception as e:
-#             if "no rows" in str(e).lower():
-#                 # Este es un caso normal - el paciente simplemente no existe en la tabla
-#                 print(f"No se encontró el paciente con cédula {cedula} en 'pacientes'.")
-#             else:
-#                 # Solo registramos otros tipos de errores que podrían ser problemas reales
-#                 print(f"Error al buscar en 'pacientes': {e}")
+#             print(f"No se encontró el paciente con cédula {cedula} en 'pacientes': {e}")
 
 #         # --- PASO 2: Si no se encuentra, buscar en 'citas' como respaldo ---
 #         print(f"Cédula {cedula} no encontrada en 'pacientes'. Buscando en 'citas'...")
@@ -2323,7 +2418,6 @@ def estadisticas_citas():
 #             print(f"Datos de respaldo encontrados para {cedula} en 'citas'.")
 #             cita_data = cita_response.data[0]
             
-#             # Preparamos el diccionario de datos con el formato de la tabla 'pacientes'
 #             datos_para_paciente = {
 #                 "cedula": cedula,
 #                 "nombre_completo": cita_data.get("nombre"),
@@ -2332,18 +2426,26 @@ def estadisticas_citas():
 #                 "numero_seguro_medico": cita_data.get("numero_seguro_medico")
 #             }
 
-#             # --- PASO 3 (NUEVO): "Promover" los datos a la tabla 'pacientes' ---
-#             # Intentamos guardar esta información en la tabla maestra.
+#             # --- PASO 3 (CORREGIDO): "Promover" los datos llamando a la función RPC ---
 #             try:
-#                 print(f"Promoviendo datos de {cedula} a la tabla 'pacientes'...")
-#                 supabase.table("pacientes").upsert(datos_para_paciente, on_conflict="cedula").execute()
+#                 print(f"Promoviendo datos de {cedula} a la tabla 'pacientes' vía RPC...")
+                
+#                 params_for_rpc = {
+#                     'p_cedula': datos_para_paciente['cedula'],
+#                     'p_nombre_completo': datos_para_paciente['nombre_completo'],
+#                     'p_telefono': datos_para_paciente['telefono'],
+#                     'p_nombre_seguro_medico': datos_para_paciente['nombre_seguro_medico'],
+#                     'p_numero_seguro_medico': datos_para_paciente['numero_seguro_medico']
+#                 }
+                
+#                 # Llama a la función de base de datos usando RPC (Remote Procedure Call)
+#                 supabase.rpc('upsert_paciente_from_public', params_for_rpc).execute()
+                
 #                 print(f"Datos de {cedula} guardados exitosamente en 'pacientes'.")
 #             except Exception as e:
-#                 # Si falla el guardado, no es crítico. La prioridad es devolver los datos
-#                 # al usuario. Registramos el error y continuamos.
-#                 print(f"ADVERTENCIA: No se pudo promover al paciente {cedula} a la tabla 'pacientes'. Error: {e}")
+#                 print(f"ADVERTENCIA: No se pudo promover al paciente {cedula}. Error RPC: {e}")
 
-#             # Devolvemos los datos encontrados para el autocompletado en el frontend.
+#             # Devolvemos los datos encontrados para el autocompletado.
 #             return jsonify(datos_para_paciente)
 
 #         # --- PASO 4: Si no se encuentra en ninguna tabla ---
@@ -2359,20 +2461,11 @@ def estadisticas_citas():
 def buscar_paciente(cedula):
     """
     API endpoint para buscar un paciente por su cédula.
-    Implementa una búsqueda en cascada y auto-promoción de datos de forma segura.
+    Implementa una búsqueda priorizando la cita más reciente para mantener los datos actualizados.
     """
     try:
-        # --- PASO 1: Buscar primero en la tabla 'pacientes' ---
-        try:
-            paciente_response = supabase.table("pacientes").select("*").eq("cedula", cedula).execute()
-            if paciente_response.data and len(paciente_response.data) > 0:
-                print(f"Paciente con cédula {cedula} encontrado directamente en 'pacientes'.")
-                return jsonify(paciente_response.data[0])
-        except Exception as e:
-            print(f"No se encontró el paciente con cédula {cedula} en 'pacientes': {e}")
-
-        # --- PASO 2: Si no se encuentra, buscar en 'citas' como respaldo ---
-        print(f"Cédula {cedula} no encontrada en 'pacientes'. Buscando en 'citas'...")
+        # --- PASO 1 (NUEVA LÓGICA): Buscar SIEMPRE en 'citas' para obtener los datos más recientes ---
+        print(f"Buscando la cita más reciente para la cédula {cedula}...")
         cita_response = supabase.table("citas") \
             .select("nombre, telefono, nombre_seguro_medico, numero_seguro_medico") \
             .eq("cedula", cedula) \
@@ -2380,11 +2473,13 @@ def buscar_paciente(cedula):
             .limit(1) \
             .execute()
 
+        # --- CASO A: Se encontró una cita reciente para esta cédula ---
         if cita_response.data:
-            print(f"Datos de respaldo encontrados para {cedula} en 'citas'.")
+            print(f"Cita reciente encontrada para {cedula}. Sincronizando con 'pacientes'...")
             cita_data = cita_response.data[0]
             
-            datos_para_paciente = {
+            # Prepara los datos que se usarán para la sincronización y para devolver al frontend.
+            datos_para_sincronizar = {
                 "cedula": cedula,
                 "nombre_completo": cita_data.get("nombre"),
                 "telefono": cita_data.get("telefono"),
@@ -2392,29 +2487,42 @@ def buscar_paciente(cedula):
                 "numero_seguro_medico": cita_data.get("numero_seguro_medico")
             }
 
-            # --- PASO 3 (CORREGIDO): "Promover" los datos llamando a la función RPC ---
+            # --- PASO 2: Usar RPC 'upsert' para crear o actualizar la tabla 'pacientes' ---
+            # 'upsert' = UPDATE si existe, INSERT si no existe. Esto resuelve ambos casos.
             try:
-                print(f"Promoviendo datos de {cedula} a la tabla 'pacientes' vía RPC...")
+                print(f"Ejecutando 'upsert' para el paciente {cedula} en la tabla 'pacientes'...")
                 
                 params_for_rpc = {
-                    'p_cedula': datos_para_paciente['cedula'],
-                    'p_nombre_completo': datos_para_paciente['nombre_completo'],
-                    'p_telefono': datos_para_paciente['telefono'],
-                    'p_nombre_seguro_medico': datos_para_paciente['nombre_seguro_medico'],
-                    'p_numero_seguro_medico': datos_para_paciente['numero_seguro_medico']
+                    'p_cedula': datos_para_sincronizar['cedula'],
+                    'p_nombre_completo': datos_para_sincronizar['nombre_completo'],
+                    'p_telefono': datos_para_sincronizar['telefono'],
+                    'p_nombre_seguro_medico': datos_para_sincronizar['nombre_seguro_medico'],
+                    'p_numero_seguro_medico': datos_para_sincronizar['numero_seguro_medico']
                 }
                 
-                # Llama a la función de base de datos usando RPC (Remote Procedure Call)
                 supabase.rpc('upsert_paciente_from_public', params_for_rpc).execute()
+                print(f"Sincronización para {cedula} completada exitosamente.")
                 
-                print(f"Datos de {cedula} guardados exitosamente en 'pacientes'.")
             except Exception as e:
-                print(f"ADVERTENCIA: No se pudo promover al paciente {cedula}. Error RPC: {e}")
+                # Si el RPC falla, es una advertencia. La app puede continuar, pero los datos no se sincronizaron.
+                print(f"ADVERTENCIA: No se pudo sincronizar al paciente {cedula} vía RPC. Error: {e}")
 
-            # Devolvemos los datos encontrados para el autocompletado.
-            return jsonify(datos_para_paciente)
+            # Devolvemos los datos de la última cita, que son los más actualizados.
+            return jsonify(datos_para_sincronizar)
 
-        # --- PASO 4: Si no se encuentra en ninguna tabla ---
+        # --- CASO B: No se encontró ninguna cita, buscar en 'pacientes' como último recurso ---
+        else:
+            print(f"No se encontraron citas para {cedula}. Buscando directamente en 'pacientes'...")
+            try:
+                paciente_response = supabase.table("pacientes").select("*").eq("cedula", cedula).execute()
+                if paciente_response.data:
+                    print(f"Paciente {cedula} encontrado en 'pacientes' (sin citas asociadas).")
+                    return jsonify(paciente_response.data[0])
+            except Exception as e:
+                print(f"Error al buscar en 'pacientes' para {cedula}: {e}")
+                # Continuar para devolver 404
+
+        # --- PASO 3: Si no se encuentra en ninguna tabla ---
         print(f"No se encontraron datos para la cédula {cedula} en ninguna tabla.")
         return jsonify({}), 404
 
