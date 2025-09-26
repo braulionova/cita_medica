@@ -23,7 +23,7 @@
 <script>
   function anunciarPaciente(nombre) {
     if ('speechSynthesis' in window) {
-      const mensaje = `${nombre}, por favor, pasar al consultorio de la doctora.`;
+      const mensaje = `${nombre}, por favor, pasar al consultorio de la doctora Jennifer Reyes`;
       const utterance = new SpeechSynthesisUtterance(mensaje);
       utterance.lang = 'es-MX';
       utterance.rate = 0.9;
