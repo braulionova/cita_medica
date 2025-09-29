@@ -1,18 +1,20 @@
-<!-- templates/configuracion.html -->
 {% extends 'admin_layout.html' %}
 
 {% block title %}Configuración - Panel de Administración{% endblock %}
 
 {% block content %}
-<div class="bg-white p-6 sm:p-8 rounded-2xl shadow-xl max-w-2xl mx-auto">
-    <h2 class="text-xl sm:text-2xl font-bold mb-6 text-center text-gray-800">Configuración General</h2>
+<div class="bg-white p-6 sm:p-8 rounded-2xl shadow-xl max-w-4xl mx-auto">
+    <h2 class="text-xl sm:text-2xl font-bold mb-6 text-center text-gray-800">Panel de Configuración</h2>
 
     <!-- Mensajes Flash -->
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
         <div class="mb-4">
           {% for category, message in messages %}
-            <div class="p-3 rounded text-sm sm:text-base {% if category == 'success' %} bg-green-100 text-green-800 {% else %} bg-red-100 text-red-800 {% endif %}">
+            <div class="p-3 rounded text-sm sm:text-base 
+              {% if category == 'success' %} bg-green-100 text-green-800 
+              {% elif category == 'error' %} bg-red-100 text-red-800
+              {% else %} bg-blue-100 text-blue-800 {% endif %}">
               {{ message }}
             </div>
           {% endfor %}
@@ -20,80 +22,163 @@
       {% endif %}
     {% endwith %}
 
-    <form method="POST" class="space-y-8">
-        <!-- ====================================================== -->
-        <!--    👇 INICIO: NUEVA SECCIÓN DE PRECIOS DE CONSULTAS 👇    -->
-        <!-- ====================================================== -->
+    <!-- ====================================================== -->
+    <!--    👇 SECCIÓN INDEPENDIENTE DE GESTIÓN DE SERVICIOS 👇    -->
+    <!-- ====================================================== -->
+    <div class="space-y-8 mb-8"> <!-- Contenedor para la sección de servicios -->
         <div class="border-t pt-6">
-            <h3 class="text-lg font-semibold text-gray-700 mb-4">Precios de Consultas</h3>
+            <h3 class="text-lg font-semibold text-gray-700 mb-2">Gestión de Servicios y Precios</h3>
             <p class="text-sm text-gray-500 mb-4">
-                Define un precio para cada tipo de consulta. Estos valores se guardarán como referencia. Deja el campo vacío si no aplica.
+                Añade, edita o elimina los tipos de consulta que ofreces y sus precios de referencia.
             </p>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {# Este bucle crea un campo de entrada para cada servicio definido en app.py #}
-                {% for key, nombre_servicio in servicios %}
-                    <div>
-                        <label for="precio_{{ key }}" class="block text-gray-700 mb-1 text-sm">{{ nombre_servicio }}</label>
-                        <input type="number" step="0.01" id="precio_{{ key }}" name="precio_{{ key }}"
-                            placeholder="Ej: 50.00"
-                            value="{{ configuracion.get('precio_' + key, '') }}"
-                            class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm">
+
+            <!-- Formulario para Agregar Nuevo Servicio (AHORA ESTÁ SOLO) -->
+            <div class="bg-gray-50 p-4 rounded-lg mb-6 border">
+                <h4 class="font-semibold text-gray-800 mb-3">Agregar Nuevo Servicio</h4>
+                <form method="POST" action="{{ url_for('agregar_servicio') }}" class="flex flex-col sm:flex-row items-end gap-3">
+                    <div class="flex-grow w-full">
+                        <label for="nombre_servicio" class="block text-gray-700 mb-1 text-sm">Nombre del Servicio</label>
+                        <input type="text" id="nombre_servicio" name="nombre" placeholder="Ej: Consulta Pediátrica" required class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm">
                     </div>
-                {% endfor %}
+                    <div class="w-full sm:w-40">
+                        <label for="precio_servicio" class="block text-gray-700 mb-1 text-sm">Precio (RD$)</label>
+                        <input type="number" step="0.01" id="precio_servicio" name="precio" placeholder="Ej: 50.00" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm">
+                    </div>
+                    <button type="submit" class="w-full sm:w-auto bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition font-semibold text-sm whitespace-nowrap">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block -mt-1 mr-1" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" /></svg>
+                        Agregar
+                    </button>
+                </form>
+            </div>
+
+            <!-- Tabla de Servicios Existentes (sin cambios) -->
+            <div class="overflow-x-auto">
+                <table class="min-w-full bg-white border">
+                    <thead class="bg-gray-100">
+                        <tr>
+                            <th class="text-left py-2 px-3 text-sm font-semibold text-gray-600">Servicio</th>
+                            <th class="text-left py-2 px-3 text-sm font-semibold text-gray-600">Precio</th>
+                            <th class="text-center py-2 px-3 text-sm font-semibold text-gray-600">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if servicios %}
+                            {% for servicio in servicios %}
+                                <tr class="border-b hover:bg-gray-50">
+                                    <td class="py-2 px-3 text-sm text-gray-800">{{ servicio.nombre }}</td>
+                                    <td class="py-2 px-3 text-sm text-gray-800">RD$ {{ "%.2f"|format(servicio.precio|float) }}</td>
+                                    <td class="py-2 px-3 text-sm text-center">
+                                        <div class="flex justify-center items-center gap-2">
+                                            <!-- Botón Editar -->
+                                            <button type="button" 
+                                                    onclick="openEditModal('{{ servicio.id }}', '{{ servicio.nombre }}', '{{ servicio.precio }}')"
+                                                    class="text-blue-600 hover:text-blue-800 font-medium">Editar</button>
+                                            
+                                            <!-- Formulario Eliminar -->
+                                            <form method="POST" action="{{ url_for('eliminar_servicio', id=servicio.id) }}" onsubmit="return confirm('¿Estás seguro de que deseas eliminar este servicio?');" class="inline">
+                                                <button type="submit" class="text-red-600 hover:text-red-800 font-medium">Eliminar</button>
+                                            </form>
+                                        </div>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="3" class="py-4 px-3 text-center text-gray-500">No hay servicios registrados.</td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
             </div>
         </div>
-        <!-- ====================================================== -->
-        <!--      FIN: NUEVA SECCIÓN DE PRECIOS DE CONSULTAS        -->
-        <!-- ====================================================== -->
+    </div>
 
+    <!-- ====================================================== -->
+    <!--     👇 INICIA FORMULARIO DE CONFIGURACIÓN GENERAL 👇      -->
+    <!-- ====================================================== -->
+    <form method="POST" action="{{ url_for('configuracion') }}" class="space-y-8">
+        <h3 class="text-xl font-bold text-gray-800 border-t pt-6">Configuración General del Calendario</h3>
+        
         <!-- SECCIÓN: LÍMITES DE PACIENTES POR DÍA -->
-        <div class="border-t pt-6">
-            <h3 class="text-lg font-semibold text-gray-700 mb-4">Límites de Pacientes por Día</h3>
-            <p class="text-sm text-gray-500 mb-4">
-                Establece el número máximo de citas permitidas para cada día. Deja un campo vacío o usa un número alto (ej. 99) para no establecer un límite.
-            </p>
+        <div>
+            <h4 class="text-lg font-semibold text-gray-700 mb-4">Límites de Pacientes por Día</h4>
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {% set dias = [
-                    ('lunes', 'Lunes'), ('martes', 'Martes'), ('miercoles', 'Miércoles'),
-                    ('jueves', 'Jueves'), ('viernes', 'Viernes'), ('sabado', 'Sábado')
-                ] %}
-
+                {% set dias = [('lunes', 'Lunes'), ('martes', 'Martes'), ('miercoles', 'Miércoles'), ('jueves', 'Jueves'), ('viernes', 'Viernes'), ('sabado', 'Sábado')] %}
                 {% for key, nombre_dia in dias %}
                     <div>
                         <label for="max_pacientes_{{ key }}" class="block text-gray-700 mb-1 text-sm">{{ nombre_dia }}</label>
-                        <input type="number" id="max_pacientes_{{ key }}" name="max_pacientes_{{ key }}"
-                            min="0" placeholder="Sin límite"
-                            value="{{ configuracion.get('max_pacientes_' + key, '') }}"
-                            class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm">
+                        <input type="number" id="max_pacientes_{{ key }}" name="max_pacientes_{{ key }}" min="0" placeholder="Sin límite" value="{{ configuracion.get('max_pacientes_' + key, '') }}" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm">
                     </div>
                 {% endfor %}
             </div>
         </div>
 
         <!-- SECCIÓN: BLOQUEO DE FINES DE SEMANA -->
-        <div class="border-t pt-6">
-            <h3 class="text-lg font-semibold text-gray-700 mb-4">Bloqueo de Fines de Semana</h3>
+        <div>
+            <h4 class="text-lg font-semibold text-gray-700 mb-4">Bloqueo de Fines de Semana</h4>
              <div class="space-y-2">
                 <label class="flex items-center space-x-3">
-                    <input type="checkbox" name="bloquear_sabados" value="true"
-                        {% if configuracion.get('bloquear_sabados') == 'true' %}checked{% endif %}
-                        class="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                    <input type="checkbox" name="bloquear_sabados" value="true" {% if configuracion.get('bloquear_sabados') == 'true' %}checked{% endif %} class="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
                     <span class="text-gray-700">Bloquear todos los Sábados</span>
                 </label>
                 <label class="flex items-center space-x-3">
-                    <input type="checkbox" name="bloquear_domingos" value="true"
-                        {% if configuracion.get('bloquear_domingos') == 'true' %}checked{% endif %}
-                        class="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                    <input type="checkbox" name="bloquear_domingos" value="true" {% if configuracion.get('bloquear_domingos') == 'true' %}checked{% endif %} class="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
                     <span class="text-gray-700">Bloquear todos los Domingos</span>
                 </label>
             </div>
         </div>
 
-        <!-- Botón de Guardar -->
-        <button type="submit"
-            class="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 transition font-semibold text-base">
-            Guardar Configuración
+        <!-- Botón de Guardar para configuraciones generales -->
+        <button type="submit" class="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 transition font-semibold text-base">
+            Guardar Configuración General
         </button>
     </form>
 </div>
+
+<!-- Modal y Script (sin cambios, pueden quedar al final) -->
+<div id="editModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+    <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-md mx-4">
+        <h3 class="text-lg font-bold text-gray-800 mb-4">Editar Servicio</h3>
+        <form id="editForm" method="POST">
+            <div class="space-y-4">
+                <div>
+                    <label for="edit_nombre" class="block text-gray-700 mb-1 text-sm">Nombre del Servicio</label>
+                    <input type="text" id="edit_nombre" name="nombre" required class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm">
+                </div>
+                <div>
+                    <label for="edit_precio" class="block text-gray-700 mb-1 text-sm">Precio (RD$)</label>
+                    <input type="number" step="0.01" id="edit_precio" name="precio" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm">
+                </div>
+                <div class="flex justify-end gap-3 pt-4">
+                    <button type="button" onclick="closeEditModal()" class="bg-gray-200 text-gray-800 py-2 px-4 rounded-lg hover:bg-gray-300 transition">Cancelar</button>
+                    <button type="submit" class="bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition">Guardar Cambios</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    const editModal = document.getElementById('editModal');
+    const editForm = document.getElementById('editForm');
+    const editNombreInput = document.getElementById('edit_nombre');
+    const editPrecioInput = document.getElementById('edit_precio');
+
+    function openEditModal(id, nombre, precio) {
+        editForm.action = `/admin/servicios/editar/${id}`;
+        editNombreInput.value = nombre;
+        editPrecioInput.value = parseFloat(precio).toFixed(2);
+        editModal.classList.remove('hidden');
+    }
+
+    function closeEditModal() {
+        editModal.classList.add('hidden');
+    }
+
+    editModal.addEventListener('click', function(event) {
+        if (event.target === editModal) {
+            closeEditModal();
+        }
+    });
+</script>
 {% endblock %}

@@ -15,6 +15,31 @@ from functools import wraps
 import requests
 import re
 
+app = Flask(__name__)
+app.secret_key = "novaglez"  # cambia por algo seguro en producción
+
+# Configurar Supabase
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+
+try:
+    supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+except Exception as e:
+    print(f"Error initializing Supabase client: {e}")
+    supabase = None
+
+# # --- AÑADE ESTE BLOQUE DE DEBUG ---
+# print("=============================================")
+# print("=== VERIFICANDO CLAVES DE SUPABASE ===")
+# if SUPABASE_KEY and len(SUPABASE_KEY) > 100:
+#     print(f"URL: {SUPABASE_URL}")
+#     print(f"CLAVE DETECTADA (parcial): {SUPABASE_KEY[:10]}...{SUPABASE_KEY[-5:]}")
+#     print("PARECE SER LA SERVICE_ROLE KEY (por su longitud).")
+# else:
+#     print("¡ADVERTENCIA! LA CLAVE CARGADA ES CORTA. ¿ESTÁS SEGURO DE QUE ES LA SERVICE_ROLE KEY?")
+# print("=============================================")
+# # --- FIN DEL BLOQUE DE DEBUG ---
+
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
@@ -100,15 +125,6 @@ def send_whatsapp_reminder(recipient_phone, patient_name, date_str):
         if e.response is not None:
             print("Error detallado de la API:", e.response.json())
         return False
-
-app = Flask(__name__)
-app.secret_key = "novaglez"  # cambia por algo seguro en producción
-
-# Configurar Supabase
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # Crea una cola para almacenar los anuncios de pacientes.
 # Esta cola es segura para usar entre diferentes peticiones.
@@ -245,25 +261,66 @@ def get_dias_llenos(config=None):
 
     return dias_llenos
     
-@app.route("/admin/configuracion", methods=["GET", "POST"])
-@role_required('admin')  # Solo administradores pueden acceder aquí
-def configuracion():
-    if "usuario" not in session:
-        flash("⚠️ Debes iniciar sesión para acceder", "error")
-        return redirect(url_for("login"))
+# @app.route("/admin/configuracion", methods=["GET", "POST"])
+# @role_required('admin')  # Solo administradores pueden acceder aquí
+# def configuracion():
+#     if "usuario" not in session:
+#         flash("⚠️ Debes iniciar sesión para acceder", "error")
+#         return redirect(url_for("login"))
 
-    # Definimos los servicios en un solo lugar para usarlos tanto en GET como en POST.
-    # Esta es nuestra "única fuente de verdad" para los tipos de consulta.
-    servicios = [
-        ('ginecologica', 'Consulta ginecológica'),
-        ('mama', 'Consulta de mama'),
-        ('post', 'Post quirúrgico'),
-        ('biopsia', 'Biopsia'),
-        ('resultados', 'Entrega de resultados')
-    ]
+#     # Definimos los servicios en un solo lugar para usarlos tanto en GET como en POST.
+#     # Esta es nuestra "única fuente de verdad" para los tipos de consulta.
+#     servicios = [
+#         ('ginecologica', 'Consulta ginecológica'),
+#         ('mama', 'Consulta de mama'),
+#         ('post', 'Post quirúrgico'),
+#         ('biopsia', 'Biopsia'),
+#         ('resultados', 'Entrega de resultados')
+#     ]
         
+#     if request.method == "POST":
+#         # --- Lógica existente para bloqueos y límites (sin cambios) ---
+#         sabados_bloqueados = 'true' if 'bloquear_sabados' in request.form else 'false'
+#         domingos_bloqueados = 'true' if 'bloquear_domingos' in request.form else 'false'
+        
+#         dias = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado']
+#         config_updates = [
+#             {'clave': 'bloquear_sabados', 'valor': sabados_bloqueados},
+#             {'clave': 'bloquear_domingos', 'valor': domingos_bloqueados}
+#         ]
+#         for dia in dias:
+#             limite = request.form.get(f'max_pacientes_{dia}')
+#             valor_a_guardar = limite if limite else '999'
+#             config_updates.append({'clave': f'max_pacientes_{dia}', 'valor': valor_a_guardar})
+
+#         # --- NUEVA LÓGICA PARA GUARDAR PRECIOS ---
+#         # Recorremos la lista de servicios y obtenemos el precio de cada uno desde el formulario.
+#         for key, _ in servicios:
+#             # Creamos la clave de la base de datos, ej: "precio_ginecologica"
+#             clave_precio = f'precio_{key}'
+#             # Obtenemos el valor del formulario. Si está vacío, guardamos una cadena vacía.
+#             valor_precio = request.form.get(clave_precio, '')
+#             config_updates.append({'clave': clave_precio, 'valor': valor_precio})
+        
+#         # Guardamos todas las actualizaciones (límites, bloqueos y precios) en una sola llamada.
+#         try:
+#             supabase.table('configuracion').upsert(config_updates, on_conflict='clave').execute()
+#             flash("✅ Configuración guardada correctamente.", "success")
+#         except Exception as e:
+#             flash(f"❌ Error al guardar la configuración: {e}", "error")
+            
+#         return redirect(url_for('configuracion'))
+
+#     # Para el método GET, obtenemos la configuración y la pasamos al template,
+#     # incluyendo ahora la lista de servicios para construir el formulario dinámicamente.
+#     config = get_configuracion()
+#     return render_template("configuracion.html", configuracion=config, servicios=servicios)
+
+@app.route("/admin/configuracion", methods=["GET", "POST"])
+@role_required('admin')
+def configuracion():
     if request.method == "POST":
-        # --- Lógica existente para bloqueos y límites (sin cambios) ---
+        # --- Lógica para guardar bloqueos y límites (sin cambios) ---
         sabados_bloqueados = 'true' if 'bloquear_sabados' in request.form else 'false'
         domingos_bloqueados = 'true' if 'bloquear_domingos' in request.form else 'false'
         
@@ -277,27 +334,25 @@ def configuracion():
             valor_a_guardar = limite if limite else '999'
             config_updates.append({'clave': f'max_pacientes_{dia}', 'valor': valor_a_guardar})
 
-        # --- NUEVA LÓGICA PARA GUARDAR PRECIOS ---
-        # Recorremos la lista de servicios y obtenemos el precio de cada uno desde el formulario.
-        for key, _ in servicios:
-            # Creamos la clave de la base de datos, ej: "precio_ginecologica"
-            clave_precio = f'precio_{key}'
-            # Obtenemos el valor del formulario. Si está vacío, guardamos una cadena vacía.
-            valor_precio = request.form.get(clave_precio, '')
-            config_updates.append({'clave': clave_precio, 'valor': valor_precio})
-        
-        # Guardamos todas las actualizaciones (límites, bloqueos y precios) en una sola llamada.
+        # Guardamos solo las configuraciones generales
         try:
             supabase.table('configuracion').upsert(config_updates, on_conflict='clave').execute()
-            flash("✅ Configuración guardada correctamente.", "success")
+            flash("✅ Configuración general guardada correctamente.", "success")
         except Exception as e:
             flash(f"❌ Error al guardar la configuración: {e}", "error")
             
         return redirect(url_for('configuracion'))
 
-    # Para el método GET, obtenemos la configuración y la pasamos al template,
-    # incluyendo ahora la lista de servicios para construir el formulario dinámicamente.
+    # --- Lógica GET (Modificada) ---
+    # 1. Obtener configuración general
     config = get_configuracion()
+    # 2. Obtener la lista de servicios desde la nueva tabla
+    servicios = []
+    try:
+        servicios = supabase.table("servicios").select("*").order("nombre").execute().data
+    except Exception as e:
+        flash(f"❌ Error al cargar la lista de servicios: {e}", "error")
+    
     return render_template("configuracion.html", configuracion=config, servicios=servicios)
 
 @app.route("/", methods=["GET", "POST"])
@@ -706,7 +761,6 @@ def secretaria_bloquear_fecha():
 @public_route
 def login():
     if "usuario" in session:
-        # Si ya está logueado, redirigir a su panel
         if session.get('role') == 'admin':
             return redirect(url_for('admin'))
         else:
@@ -717,32 +771,30 @@ def login():
         password = request.form["clave"]
 
         try:
-            # Primero verificamos si hay usuarios en el sistema
             any_user = supabase.table("usuarios").select("id").execute().data
             if not any_user:
-                flash("❌ No hay usuarios registrados en el sistema. Crea un administrador primero.", "error")
+                flash("❌ No hay usuarios registrados. Crea un administrador primero.", "error")
                 return redirect(url_for("crear_admin_inicial"))
 
-            # Buscar el usuario específico
             response = supabase.table("usuarios").select("*").eq("username", username).execute()
             users = response.data
 
-            if not users:  # Si no se encontró el usuario
+            if not users:
                 flash("❌ Usuario o contraseña incorrectos.", "error")
                 return redirect(url_for("login"))
 
-            user_data = users[0]  # Tomamos el primer usuario que coincida
+            user_data = users[0]
             
+            # La verificación de contraseña y sesión de Flask es todo lo que necesitamos
             if check_password_hash(user_data['password_hash'], password):
                 session["usuario"] = user_data['username']
-                session["role"] = user_data['role']
+                session["role"] = user_data['role'] # <--- Cambiado de 'rol' a 'role' para consistencia
                 
                 flash(f"✅ ¡Bienvenido de nuevo, {user_data['username']}!", "success")
 
-                # --- LÓGICA DE REDIRECCIÓN POR ROL ---
                 if user_data['role'] == 'admin':
                     return redirect(url_for("admin"))
-                else: # Si es 'secretaria'
+                else: 
                     return redirect(url_for("secretaria_dashboard"))
             else:
                 flash("❌ Usuario o contraseña incorrectos.", "error")
@@ -1565,23 +1617,113 @@ def secretaria_dashboard():
 #     # Renderizamos una nueva plantilla específica para la secretaria
 #     return render_template("secretaria_admin.html", citas=citas, filtro_fecha=filtro_fecha)
 
+# @app.route('/secretaria/pagos', methods=['GET', 'POST'])
+# @role_required('secretaria') # Solo secretarias pueden acceder aquí
+# def secretaria_registrar_pago():
+#     if "usuario" not in session:
+#         flash("⚠️ Debes iniciar sesión para acceder", "error")
+#         return redirect(url_for("login"))
+    
+#     servicios = [
+#         ('ginecologica', 'Consulta ginecológica'),
+#         ('mama', 'Consulta de mama'),
+#         ('post', 'Post quirúrgico'),
+#         ('biopsia', 'Biopsia'),
+#         ('resultados', 'Entrega de resultados')
+#     ]
+
+#     if request.method == 'POST':
+#         # ... (La lógica POST no necesita cambios) ...
+#         try:
+#             cita_id = request.form['cita_id']
+#             monto = request.form['monto']
+#             metodo_pago = request.form['metodo_pago']
+#             fecha_pago = request.form['fecha_pago']
+#             notas = request.form.get('notas', '')
+#             motivo_actualizado = request.form['motivo']
+
+#             supabase.table('pagos').insert({
+#                 'cita_id': cita_id, 'monto': monto, 'metodo_pago': metodo_pago,
+#                 'fecha_pago': fecha_pago, 'notas': notas
+#             }).execute()
+
+#             supabase.table('citas').update({
+#                 'pagado': True, 'motivo': motivo_actualizado
+#             }).eq('id', cita_id).execute()
+
+#             flash('✅ Pago registrado correctamente y motivo actualizado.', 'success')
+#         except Exception as e:
+#             flash(f'❌ Error al registrar el pago: {e}', 'error')
+        
+#         fecha_actual = request.args.get('fecha', date.today().strftime('%Y-%m-%d'))
+#         return redirect(url_for('registrar_pago', fecha=fecha_actual))
+
+#     # --- LÓGICA GET ACTUALIZADA ---
+#     filtro_fecha = request.args.get("fecha", date.today().strftime('%Y-%m-%d'))
+#     config = get_configuracion()
+    
+#     # --- 1. OBTENER CITAS PENDIENTES DE PAGO (como antes) ---
+#     citas_por_pagar = []
+#     try:
+#         response_pendientes = supabase.table('citas').select('*') \
+#             .eq('fecha', filtro_fecha).eq('pagado', False) \
+#             .order('orden', desc=False).execute()
+#         citas_por_pagar = response_pendientes.data
+#     except Exception as e:
+#         flash(f'❌ Error al cargar citas pendientes: {e}', 'error')
+
+#     # --- 2. NUEVO: OBTENER PAGOS YA REALIZADOS para la fecha de la cita ---
+#     pagos_realizados = []
+#     try:
+#         response_pagados = supabase.table('pagos').select('*, citas!inner(nombre, motivo, fecha)') \
+#             .eq('citas.fecha', filtro_fecha) \
+#             .order('id', desc=True).execute()
+        
+#         # # Imprimimos la respuesta cruda en la consola para inspeccionarla
+#         # print("----------- DATOS CRUDOS DE SUPABASE (pagos realizados) -----------")
+#         # print(response_pagados.data)
+#         # print(f"----------- FILTRANDO POR FECHA: {filtro_fecha} -----------")
+
+#         pagos_realizados = response_pagados.data
+#     except Exception as e:
+#         flash(f'❌ Error al cargar pagos realizados: {e}', 'error')
+    
+#     # --- 3. NUEVO: CALCULAR TOTALES ---
+#     total_pagado = sum(float(pago.get('monto', 0) or 0) for pago in pagos_realizados)
+    
+#     total_pendiente = 0
+#     for cita in citas_por_pagar:
+#         clave_precio = f"precio_{cita.get('motivo', '')}"
+#         precio_str = config.get(clave_precio, '0')
+#         try:
+#             total_pendiente += float(precio_str or 0)
+#         except (ValueError, TypeError):
+#             # Ignora si el precio no es un número válido
+#             pass
+
+#     return render_template(
+#         "secretaria_pagos.html", 
+#         citas_por_pagar=citas_por_pagar, 
+#         pagos_realizados=pagos_realizados, # <- Pasamos la nueva lista
+#         total_pagado=total_pagado,         # <- Pasamos el nuevo total
+#         total_pendiente=total_pendiente,   # <- Pasamos el nuevo total
+#         configuracion=config,
+#         filtro_fecha=filtro_fecha,
+#         date=date,
+#         servicios=servicios
+#     )
+
 @app.route('/secretaria/pagos', methods=['GET', 'POST'])
-@role_required('secretaria') # Solo secretarias pueden acceder aquí
+@role_required('secretaria')  # Solo secretarias pueden acceder aquí
 def secretaria_registrar_pago():
     if "usuario" not in session:
         flash("⚠️ Debes iniciar sesión para acceder", "error")
         return redirect(url_for("login"))
     
-    servicios = [
-        ('ginecologica', 'Consulta ginecológica'),
-        ('mama', 'Consulta de mama'),
-        ('post', 'Post quirúrgico'),
-        ('biopsia', 'Biopsia'),
-        ('resultados', 'Entrega de resultados')
-    ]
+    # 🔹 Servicios cargados dinámicamente
+    servicios = get_servicios()
 
     if request.method == 'POST':
-        # ... (La lógica POST no necesita cambios) ...
         try:
             cita_id = request.form['cita_id']
             monto = request.form['monto']
@@ -1590,13 +1732,19 @@ def secretaria_registrar_pago():
             notas = request.form.get('notas', '')
             motivo_actualizado = request.form['motivo']
 
+            # Insertar en tabla pagos
             supabase.table('pagos').insert({
-                'cita_id': cita_id, 'monto': monto, 'metodo_pago': metodo_pago,
-                'fecha_pago': fecha_pago, 'notas': notas
+                'cita_id': cita_id,
+                'monto': monto,
+                'metodo_pago': metodo_pago,
+                'fecha_pago': fecha_pago,
+                'notas': notas
             }).execute()
 
+            # Actualizar cita como pagada y actualizar motivo
             supabase.table('citas').update({
-                'pagado': True, 'motivo': motivo_actualizado
+                'pagado': True,
+                'motivo': motivo_actualizado
             }).eq('id', cita_id).execute()
 
             flash('✅ Pago registrado correctamente y motivo actualizado.', 'success')
@@ -1604,13 +1752,15 @@ def secretaria_registrar_pago():
             flash(f'❌ Error al registrar el pago: {e}', 'error')
         
         fecha_actual = request.args.get('fecha', date.today().strftime('%Y-%m-%d'))
-        return redirect(url_for('registrar_pago', fecha=fecha_actual))
+        return redirect(url_for('secretaria_registrar_pago', fecha=fecha_actual))
 
-    # --- LÓGICA GET ACTUALIZADA ---
+    # ==========================
+    # 🔹 LÓGICA GET
+    # ==========================
     filtro_fecha = request.args.get("fecha", date.today().strftime('%Y-%m-%d'))
     config = get_configuracion()
     
-    # --- 1. OBTENER CITAS PENDIENTES DE PAGO (como antes) ---
+    # --- 1. OBTENER CITAS PENDIENTES DE PAGO ---
     citas_por_pagar = []
     try:
         response_pendientes = supabase.table('citas').select('*') \
@@ -1620,46 +1770,42 @@ def secretaria_registrar_pago():
     except Exception as e:
         flash(f'❌ Error al cargar citas pendientes: {e}', 'error')
 
-    # --- 2. NUEVO: OBTENER PAGOS YA REALIZADOS para la fecha de la cita ---
+    # --- 2. OBTENER PAGOS YA REALIZADOS ---
     pagos_realizados = []
     try:
         response_pagados = supabase.table('pagos').select('*, citas!inner(nombre, motivo, fecha)') \
             .eq('citas.fecha', filtro_fecha) \
             .order('id', desc=True).execute()
-        
-        # # Imprimimos la respuesta cruda en la consola para inspeccionarla
-        # print("----------- DATOS CRUDOS DE SUPABASE (pagos realizados) -----------")
-        # print(response_pagados.data)
-        # print(f"----------- FILTRANDO POR FECHA: {filtro_fecha} -----------")
-
         pagos_realizados = response_pagados.data
     except Exception as e:
         flash(f'❌ Error al cargar pagos realizados: {e}', 'error')
     
-    # --- 3. NUEVO: CALCULAR TOTALES ---
+    # --- 3. CALCULAR TOTALES ---
     total_pagado = sum(float(pago.get('monto', 0) or 0) for pago in pagos_realizados)
-    
+
+    # Crear un mapa de precios desde servicios
+    precios_servicios = {s['nombre']: float(s.get('precio', 0) or 0) for s in servicios}
+
     total_pendiente = 0
     for cita in citas_por_pagar:
-        clave_precio = f"precio_{cita.get('motivo', '')}"
-        precio_str = config.get(clave_precio, '0')
-        try:
-            total_pendiente += float(precio_str or 0)
-        except (ValueError, TypeError):
-            # Ignora si el precio no es un número válido
-            pass
+        precio = precios_servicios.get(cita.get('motivo', ''), 0)
+        total_pendiente += precio
 
+    # ==========================
+    # 🔹 RETORNO FINAL
+    # ==========================
     return render_template(
         "secretaria_pagos.html", 
         citas_por_pagar=citas_por_pagar, 
-        pagos_realizados=pagos_realizados, # <- Pasamos la nueva lista
-        total_pagado=total_pagado,         # <- Pasamos el nuevo total
-        total_pendiente=total_pendiente,   # <- Pasamos el nuevo total
+        pagos_realizados=pagos_realizados,
+        total_pagado=total_pagado,
+        total_pendiente=total_pendiente,
         configuracion=config,
         filtro_fecha=filtro_fecha,
         date=date,
         servicios=servicios
     )
+
 
 # @app.route("/admin/registrar_cita_admin", methods=["GET", "POST"])
 # @role_required('admin', 'secretaria') # Protegemos para que solo admin y secretaria puedan acceder
@@ -1900,22 +2046,133 @@ def registrar_cita_secretaria():
         configuracion=config
     )
 
+# @app.route('/admin/registrar_pagos', methods=['GET', 'POST'])
+# def admin_registrar_pago():
+#     if "usuario" not in session:
+#         flash("⚠️ Debes iniciar sesión para acceder", "error")
+#         return redirect(url_for("login"))
+    
+#     servicios = [
+#         ('ginecologica', 'Consulta ginecológica'),
+#         ('mama', 'Consulta de mama'),
+#         ('post', 'Post quirúrgico'),
+#         ('biopsia', 'Biopsia'),
+#         ('resultados', 'Entrega de resultados')
+#     ]
+
+#     if request.method == 'POST':
+#         # ... (La lógica POST no necesita cambios) ...
+#         try:
+#             cita_id = request.form['cita_id']
+#             monto = request.form['monto']
+#             metodo_pago = request.form['metodo_pago']
+#             fecha_pago = request.form['fecha_pago']
+#             notas = request.form.get('notas', '')
+#             motivo_actualizado = request.form['motivo']
+
+#             supabase.table('pagos').insert({
+#                 'cita_id': cita_id, 'monto': monto, 'metodo_pago': metodo_pago,
+#                 'fecha_pago': fecha_pago, 'notas': notas
+#             }).execute()
+
+#             supabase.table('citas').update({
+#                 'pagado': True, 'motivo': motivo_actualizado
+#             }).eq('id', cita_id).execute()
+
+#             flash('✅ Pago registrado correctamente y motivo actualizado.', 'success')
+#         except Exception as e:
+#             flash(f'❌ Error al registrar el pago: {e}', 'error')
+        
+#         fecha_actual = request.args.get('fecha', date.today().strftime('%Y-%m-%d'))
+
+#         if session.get('role') == 'admin':
+#             return redirect(url_for('admin_registrar_pago', fecha=fecha_actual))
+
+#     # --- LÓGICA GET ACTUALIZADA ---
+#     filtro_fecha = request.args.get("fecha", date.today().strftime('%Y-%m-%d'))
+#     config = get_configuracion()
+    
+#     # --- 1. OBTENER CITAS PENDIENTES DE PAGO (como antes) ---
+#     citas_por_pagar = []
+#     try:
+#         response_pendientes = supabase.table('citas').select('*') \
+#             .eq('fecha', filtro_fecha).eq('pagado', False) \
+#             .order('orden', desc=False).execute()
+#         citas_por_pagar = response_pendientes.data
+#     except Exception as e:
+#         flash(f'❌ Error al cargar citas pendientes: {e}', 'error')
+
+#     # --- 2. NUEVO: OBTENER PAGOS YA REALIZADOS para la fecha de la cita ---
+#     pagos_realizados = []
+#     try:
+#         response_pagados = supabase.table('pagos').select('*, citas!inner(nombre, motivo, fecha)') \
+#             .eq('citas.fecha', filtro_fecha) \
+#             .order('id', desc=True).execute()
+        
+#         # # Imprimimos la respuesta cruda en la consola para inspeccionarla
+#         # print("----------- DATOS CRUDOS DE SUPABASE (pagos realizados) -----------")
+#         # print(response_pagados.data)
+#         # print(f"----------- FILTRANDO POR FECHA: {filtro_fecha} -----------")
+
+#         pagos_realizados = response_pagados.data
+#     except Exception as e:
+#         flash(f'❌ Error al cargar pagos realizados: {e}', 'error')
+    
+#     # --- 3. NUEVO: CALCULAR TOTALES ---
+#     total_pagado = sum(float(pago.get('monto', 0) or 0) for pago in pagos_realizados)
+    
+#     total_pendiente = 0
+#     for cita in citas_por_pagar:
+#         clave_precio = f"precio_{cita.get('motivo', '')}"
+#         precio_str = config.get(clave_precio, '0')
+#         print(cita.get('fecha', 'N/A'))
+#         try:
+#             total_pendiente += float(precio_str or 0)
+#         except (ValueError, TypeError):
+#             # Ignora si el precio no es un número válido
+#             pass
+#     # =================================================================
+#     # NUEVO: OBTENER IDs DE CITAS QUE YA TIENEN SEGUIMIENTO
+#     # =================================================================
+#     citas_con_seguimiento = set()
+#     if pagos_realizados:
+#         try:
+#             # 1. Obtener la lista de IDs de las citas pagadas
+#             ids_citas_pagadas = [pago['cita_id'] for pago in pagos_realizados]
+            
+#             # 2. Consultar la tabla 'seguimiento' para ver cuáles de esos IDs ya existen
+#             seguimientos = supabase.table('seguimiento').select('cita_id').in_('cita_id', ids_citas_pagadas).execute().data
+            
+#             # 3. Crear un conjunto (set) con los IDs para una búsqueda rápida en el template
+#             citas_con_seguimiento = {s['cita_id'] for s in seguimientos}
+#         except Exception as e:
+#             flash(f'❌ Error al verificar seguimientos: {e}', 'error')
+#     # =================================================================
+
+#     return render_template(
+#         "admin_pagos.html", 
+#         citas_por_pagar=citas_por_pagar, 
+#         pagos_realizados=pagos_realizados, # <- Pasamos la nueva lista
+#         total_pagado=total_pagado,         # <- Pasamos el nuevo total
+#         total_pendiente=total_pendiente,   # <- Pasamos el nuevo total
+#         configuracion=config,
+#         filtro_fecha=filtro_fecha,
+#         date=date,
+#         servicios=servicios,
+#         citas_con_seguimiento=citas_con_seguimiento, # <-- PASAMOS LA NUEVA VARIABLE
+#         fechas_bloqueadas=[] # Inicializamos como lista vacía para evitar el error
+#     )
+
 @app.route('/admin/registrar_pagos', methods=['GET', 'POST'])
 def admin_registrar_pago():
     if "usuario" not in session:
         flash("⚠️ Debes iniciar sesión para acceder", "error")
         return redirect(url_for("login"))
     
-    servicios = [
-        ('ginecologica', 'Consulta ginecológica'),
-        ('mama', 'Consulta de mama'),
-        ('post', 'Post quirúrgico'),
-        ('biopsia', 'Biopsia'),
-        ('resultados', 'Entrega de resultados')
-    ]
+    # 🔹 Servicios cargados desde la función (dinámico, no hardcodeado)
+    servicios = get_servicios()
 
     if request.method == 'POST':
-        # ... (La lógica POST no necesita cambios) ...
         try:
             cita_id = request.form['cita_id']
             monto = request.form['monto']
@@ -1924,13 +2181,19 @@ def admin_registrar_pago():
             notas = request.form.get('notas', '')
             motivo_actualizado = request.form['motivo']
 
+            # Insertar en tabla pagos
             supabase.table('pagos').insert({
-                'cita_id': cita_id, 'monto': monto, 'metodo_pago': metodo_pago,
-                'fecha_pago': fecha_pago, 'notas': notas
+                'cita_id': cita_id,
+                'monto': monto,
+                'metodo_pago': metodo_pago,
+                'fecha_pago': fecha_pago,
+                'notas': notas
             }).execute()
 
+            # Actualizar cita como pagada y actualizar motivo
             supabase.table('citas').update({
-                'pagado': True, 'motivo': motivo_actualizado
+                'pagado': True,
+                'motivo': motivo_actualizado
             }).eq('id', cita_id).execute()
 
             flash('✅ Pago registrado correctamente y motivo actualizado.', 'success')
@@ -1942,11 +2205,13 @@ def admin_registrar_pago():
         if session.get('role') == 'admin':
             return redirect(url_for('admin_registrar_pago', fecha=fecha_actual))
 
-    # --- LÓGICA GET ACTUALIZADA ---
+    # ==========================
+    # 🔹 LÓGICA GET
+    # ==========================
     filtro_fecha = request.args.get("fecha", date.today().strftime('%Y-%m-%d'))
     config = get_configuracion()
     
-    # --- 1. OBTENER CITAS PENDIENTES DE PAGO (como antes) ---
+    # --- 1. OBTENER CITAS PENDIENTES DE PAGO ---
     citas_por_pagar = []
     try:
         response_pendientes = supabase.table('citas').select('*') \
@@ -1956,66 +2221,55 @@ def admin_registrar_pago():
     except Exception as e:
         flash(f'❌ Error al cargar citas pendientes: {e}', 'error')
 
-    # --- 2. NUEVO: OBTENER PAGOS YA REALIZADOS para la fecha de la cita ---
+    # --- 2. OBTENER PAGOS YA REALIZADOS ---
     pagos_realizados = []
     try:
         response_pagados = supabase.table('pagos').select('*, citas!inner(nombre, motivo, fecha)') \
             .eq('citas.fecha', filtro_fecha) \
             .order('id', desc=True).execute()
-        
-        # # Imprimimos la respuesta cruda en la consola para inspeccionarla
-        # print("----------- DATOS CRUDOS DE SUPABASE (pagos realizados) -----------")
-        # print(response_pagados.data)
-        # print(f"----------- FILTRANDO POR FECHA: {filtro_fecha} -----------")
-
         pagos_realizados = response_pagados.data
     except Exception as e:
         flash(f'❌ Error al cargar pagos realizados: {e}', 'error')
     
-    # --- 3. NUEVO: CALCULAR TOTALES ---
+    # --- 3. CALCULAR TOTALES ---
     total_pagado = sum(float(pago.get('monto', 0) or 0) for pago in pagos_realizados)
-    
+
+    # Crear un mapa de precios desde servicios
+    precios_servicios = {s['nombre']: float(s.get('precio', 0) or 0) for s in servicios}
+
     total_pendiente = 0
     for cita in citas_por_pagar:
-        clave_precio = f"precio_{cita.get('motivo', '')}"
-        precio_str = config.get(clave_precio, '0')
-        print(cita.get('fecha', 'N/A'))
-        try:
-            total_pendiente += float(precio_str or 0)
-        except (ValueError, TypeError):
-            # Ignora si el precio no es un número válido
-            pass
-    # =================================================================
-    # NUEVO: OBTENER IDs DE CITAS QUE YA TIENEN SEGUIMIENTO
-    # =================================================================
+        precio = precios_servicios.get(cita.get('motivo', ''), 0)
+        total_pendiente += precio
+
+    # --- 4. OBTENER CITAS QUE YA TIENEN SEGUIMIENTO ---
     citas_con_seguimiento = set()
     if pagos_realizados:
         try:
-            # 1. Obtener la lista de IDs de las citas pagadas
             ids_citas_pagadas = [pago['cita_id'] for pago in pagos_realizados]
-            
-            # 2. Consultar la tabla 'seguimiento' para ver cuáles de esos IDs ya existen
-            seguimientos = supabase.table('seguimiento').select('cita_id').in_('cita_id', ids_citas_pagadas).execute().data
-            
-            # 3. Crear un conjunto (set) con los IDs para una búsqueda rápida en el template
+            seguimientos = supabase.table('seguimiento').select('cita_id') \
+                .in_('cita_id', ids_citas_pagadas).execute().data
             citas_con_seguimiento = {s['cita_id'] for s in seguimientos}
         except Exception as e:
             flash(f'❌ Error al verificar seguimientos: {e}', 'error')
-    # =================================================================
 
+    # ==========================
+    # 🔹 RETORNO FINAL
+    # ==========================
     return render_template(
         "admin_pagos.html", 
         citas_por_pagar=citas_por_pagar, 
-        pagos_realizados=pagos_realizados, # <- Pasamos la nueva lista
-        total_pagado=total_pagado,         # <- Pasamos el nuevo total
-        total_pendiente=total_pendiente,   # <- Pasamos el nuevo total
+        pagos_realizados=pagos_realizados,
+        total_pagado=total_pagado,
+        total_pendiente=total_pendiente,
         configuracion=config,
         filtro_fecha=filtro_fecha,
         date=date,
         servicios=servicios,
-        citas_con_seguimiento=citas_con_seguimiento, # <-- PASAMOS LA NUEVA VARIABLE
-        fechas_bloqueadas=[] # Inicializamos como lista vacía para evitar el error
+        citas_con_seguimiento=citas_con_seguimiento,
+        fechas_bloqueadas=[]
     )
+
 
 @app.route('/admin/seguimiento_paciente', methods=['POST'])
 @role_required('admin', 'secretaria') # Permitir a ambos roles
@@ -2530,6 +2784,115 @@ def buscar_paciente(cedula):
         print(f"Error CRÍTICO al buscar paciente por cédula '{cedula}': {e}")
         return jsonify({"error": str(e)}), 500
 
+# ======================================================
+# --- INICIO: RUTAS CRUD PARA GESTIÓN DE SERVICIOS ---
+# ======================================================
+
+@app.route('/admin/servicios/agregar', methods=['POST'])
+@role_required('admin')
+def agregar_servicio():
+    nombre = request.form.get('nombre')
+    precio = request.form.get('precio', 0)
+
+    if not nombre:
+        flash('❌ El nombre del servicio es obligatorio.', 'error')
+        return redirect(url_for('configuracion'))
+    
+    try:
+        supabase.table('servicios').insert({
+            'nombre': nombre.strip(),
+            'precio': precio
+        }).execute()
+        flash(f'✅ Servicio "{nombre}" agregado correctamente.', 'success')
+    except APIError as e:
+        # Capturamos el error específico de violación de unicidad
+        if '23505' in str(e):
+            flash(f'❌ Error: El servicio "{nombre}" ya existe.', 'error')
+        # Capturamos el error de permisos (por si acaso)
+        elif '42501' in str(e):
+             flash('❌ Error de permisos de base de datos. Asegúrate de que el servidor usa la clave "service_role".', 'error')
+        else:
+            flash(f'❌ Error de base de datos al agregar servicio: {e}', 'error')
+    except Exception as e:
+        flash(f'❌ Ocurrió un error inesperado: {e}', 'error')
+        
+    return redirect(url_for('configuracion'))
+
+
+@app.route('/admin/servicios/editar/<int:id>', methods=['POST'])
+@role_required('admin')
+def editar_servicio(id):
+    nombre = request.form.get('nombre')
+    precio = request.form.get('precio')
+
+    if not nombre:
+        flash('❌ El nombre del servicio no puede estar vacío.', 'error')
+        return redirect(url_for('configuracion'))
+
+    try:
+        supabase.table('servicios').update({
+            'nombre': nombre.strip(),
+            'precio': precio
+        }).eq('id', id).execute()
+        flash(f'✅ Servicio actualizado correctamente.', 'success')
+    except APIError as e:
+        if '23505' in str(e):
+            flash(f'❌ Error: Ya existe otro servicio con el nombre "{nombre}".', 'error')
+        else:
+            flash(f'❌ Error de base de datos al editar servicio: {e}', 'error')
+    except Exception as e:
+        flash(f'❌ Ocurrió un error inesperado al editar: {e}', 'error')
+        
+    return redirect(url_for('configuracion'))
+
+
+@app.route('/admin/servicios/eliminar/<int:id>', methods=['POST'])
+@role_required('admin')
+def eliminar_servicio(id):
+    try:
+        supabase.table('servicios').delete().eq('id', id).execute()
+        flash('🗑️ Servicio eliminado correctamente.', 'success')
+    except Exception as e:
+        flash(f'❌ Error al eliminar el servicio: {e}', 'error')
+    
+    return redirect(url_for('configuracion'))
+
+# ======================================================
+# ---    FIN: RUTAS CRUD PARA GESTIÓN DE SERVICIOS   ---
+# ======================================================
+
+# --- FUNCIÓN AUXILIAR PARA OBTENER SERVICIOS ---
+def get_servicios():
+    """Obtiene la lista de servicios de la BD, ordenados por nombre."""
+    try:
+        servicios = supabase.table("servicios").select("*").order("nombre").execute().data
+        return servicios if servicios else []
+    except Exception as e:
+        print(f"Error al obtener la lista de servicios: {e}")
+        return [] # Devuelve una lista vacía en caso de error para no romper la app
+
+# =======================================================
+# --- INICIO: FILTRO DE PLANTILLA PARA FORMATEAR FECHAS ---
+# =======================================================
+@app.template_filter('formatdate')
+def format_date(date_string):
+    """
+    Filtro personalizado para convertir una fecha en formato YYYY-MM-DD
+    a un formato más legible DD/MM/YYYY.
+    """
+    if not date_string:
+        return "" # Devuelve una cadena vacía si la fecha es nula o no existe
+    try:
+        # 1. Convierte la cadena de texto a un objeto de fecha
+        date_obj = datetime.strptime(date_string, '%Y-%m-%d')
+        # 2. Formatea ese objeto al nuevo formato
+        return date_obj.strftime('%d/%m/%Y')
+    except (ValueError, TypeError):
+        # Si hay un error (ej. formato inesperado), devuelve el valor original
+        return date_string
+# =======================================================
+# --- FIN: FILTRO DE PLANTILLA ---
+# =======================================================
 
 if __name__ == "__main__":
     app.run(debug=True)
