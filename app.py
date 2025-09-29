@@ -15,6 +15,10 @@ from functools import wraps
 import requests
 import re
 
+# Cargar variables de entorno
+load_dotenv()
+
+# Configurar Flask
 app = Flask(__name__)
 app.secret_key = "novaglez"  # cambia por algo seguro en producción
 
@@ -47,9 +51,6 @@ CHAT_ID = os.getenv("CHAT_ID")
 ACCESS_TOKEN = os.getenv("ACCESS_TOKEN")
 PHONE_NUMBER_ID = os.getenv("PHONE_NUMBER_ID")
 WHATSAPP_API_URL = os.getenv("WHATSAPP_API_URL")
-
-# Cargar variables de entorno
-load_dotenv()
 
 
 def send_telegram_message(message):
