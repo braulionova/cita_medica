@@ -55,7 +55,7 @@
             <div class="row align-items-center">
                 <div class="col-lg-6">
                     <h1 class="display-4 fw-bold">{{ doctora.nombre }}</h1>
-                    <p class="lead text-secondary mb-4">{{ doctora.especialidades }}, Láser Ginecológico.</p>
+                    <p class="lead text-secondary mb-4">{{ doctora.especialidades }}</p>
                     <p>Comprometida con el cuidado integral de la salud femenina en todas las etapas de la vida, ofreciendo atención personalizada y de vanguardia.</p>
                     <a href="{{ url_for('registrar_cita') }}" class="btn btn-primary btn-lg me-2">Agendar Cita Ahora</a>
                     <a href="#contacto" class="btn btn-outline-primary btn-lg">Ver Contacto</a>
@@ -67,7 +67,7 @@
         </div>
     </section>
 
-    <!-- INICIO: SECCIÓN DE SERVICIOS ACTUALIZADA -->
+    <!-- Servicios Section -->
     <section id="servicios" class="py-5 bg-light">
         <div class="container">
             <div class="text-center mb-5">
@@ -75,70 +75,63 @@
                 <p class="text-muted">Atención especializada para tu bienestar y salud.</p>
             </div>
             <div class="row">
-                <!-- Tarjeta 1: Consulta Ginecológica -->
                 <div class="col-md-6 col-lg-4 mb-4">
                     <div class="card service-card h-100 text-center">
                         <div class="card-body">
                             <div class="icon-circle mb-3"><i class="bi bi-person-check-fill"></i></div>
-                            <h5 class="card-title">Consulta Ginecológica</h5>
-                            <p class="card-text">Revisiones anuales, Papanicolau, diagnóstico y tratamiento de afecciones ginecológicas para un cuidado preventivo.</p>
+                            <h5 class="card-title">Ginecología General</h5>
+                            <p class="card-text">Consultas de rutina, Papanicolau, diagnóstico y tratamiento de afecciones ginecológicas.</p>
                         </div>
                     </div>
                 </div>
-                <!-- Tarjeta 2: Salud Mamaria -->
+                <div class="col-md-6 col-lg-4 mb-4">
+                    <div class="card service-card h-100 text-center">
+                        <div class="card-body">
+                            <div class="icon-circle mb-3"><i class="bi bi-clipboard2-pulse-fill"></i></div>
+                            <h5 class="card-title">Obstetricia y Control Prenatal</h5>
+                            <p class="card-text">Seguimiento completo del embarazo para garantizar la salud de la madre y el bebé.</p>
+                        </div>
+                    </div>
+                </div>
                 <div class="col-md-6 col-lg-4 mb-4">
                     <div class="card service-card h-100 text-center">
                         <div class="card-body">
                             <div class="icon-circle mb-3"><i class="bi bi-bandaid-fill"></i></div>
-                            <h5 class="card-title">Consulta de Mama</h5>
-                            <p class="card-text">Evaluación clínica, prevención y diagnóstico de enfermedades mamarias, incluyendo la realización de biopsias de mama.</p>
+                            <h5 class="card-title">Mastología (Salud Mamaria)</h5>
+                            <p class="card-text">Prevención, diagnóstico y tratamiento de enfermedades de la mama, tanto benignas como malignas.</p>
                         </div>
                     </div>
                 </div>
-                <!-- Tarjeta 3: Obstetricia -->
-                <div class="col-md-6 col-lg-4 mb-4">
+                 <div class="col-md-6 col-lg-4 mb-4">
                     <div class="card service-card h-100 text-center">
                         <div class="card-body">
                             <div class="icon-circle mb-3"><i class="bi bi-hearts"></i></div>
-                            <h5 class="card-title">Embarazo, Parto y Cesárea</h5>
-                            <p class="card-text">Seguimiento completo durante el embarazo, y atención especializada para el parto natural o cesárea.</p>
+                            <h5 class="card-title">Planificación Familiar</h5>
+                            <p class="card-text">Asesoría sobre métodos anticonceptivos y salud reproductiva para tomar decisiones informadas.</p>
                         </div>
                     </div>
                 </div>
-                 <!-- Tarjeta 4: Procedimientos -->
                 <div class="col-md-6 col-lg-4 mb-4">
                     <div class="card service-card h-100 text-center">
                         <div class="card-body">
                             <div class="icon-circle mb-3"><i class="bi bi-file-earmark-medical-fill"></i></div>
-                            <h5 class="card-title">Procedimientos Ginecológicos</h5>
-                            <p class="card-text">Realización de procedimientos como Legrado, Biopsia de cérvix y otros tratamientos menores en consultorio.</p>
+                            <h5 class="card-title">Evaluación de Resultados</h5>
+                            <p class="card-text">Interpretación detallada de estudios y biopsias para definir los próximos pasos en tu tratamiento.</p>
                         </div>
                     </div>
                 </div>
-                <!-- Tarjeta 5: Láser Ginecológico -->
                 <div class="col-md-6 col-lg-4 mb-4">
                     <div class="card service-card h-100 text-center">
                         <div class="card-body">
-                            <div class="icon-circle mb-3"><i class="bi bi-lightning-charge-fill"></i></div>
-                            <h5 class="card-title">Láser Ginecológico</h5>
-                            <p class="card-text">Tratamientos innovadores para el rejuvenecimiento vaginal, incontinencia urinaria leve y estética genital.</p>
-                        </div>
-                    </div>
-                </div>
-                <!-- Tarjeta 6: Planificación -->
-                <div class="col-md-6 col-lg-4 mb-4">
-                    <div class="card service-card h-100 text-center">
-                        <div class="card-body">
-                            <div class="icon-circle mb-3"><i class="bi bi-calendar2-heart-fill"></i></div>
-                            <h5 class="card-title">Planificación Familiar</h5>
-                            <p class="card-text">Asesoría integral sobre métodos anticonceptivos y salud reproductiva para que tomes decisiones informadas.</p>
+                            <div class="icon-circle mb-3"><i class="bi bi-calendar2-check-fill"></i></div>
+                            <h5 class="card-title">Seguimiento Post-Quirúrgico</h5>
+                            <p class="card-text">Cuidado y monitoreo post-operatorio para asegurar una recuperación óptima y segura.</p>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
     </section>
-    <!-- FIN: SECCIÓN DE SERVICIOS ACTUALIZADA -->
 
     <!-- Sobre Mí Section -->
     <section id="sobre-mi" class="py-5">
