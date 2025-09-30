@@ -95,9 +95,9 @@
             </form>
         </div>
 
-        <!-- Columna 2: Resumen y Seguimiento -->
+        <!-- Columna 2: Resumen y Seguimiento (sin cambios)-->
         <div class="space-y-8">
-            <!-- Sección de Pagos Realizados (MODIFICADA) -->
+            <!-- Sección de Pagos Realizados -->
             <div class="bg-white p-6 rounded-2xl shadow-xl">
                 <h3 class="text-xl font-bold text-gray-800 border-b pb-3 mb-4">✅ Pagos Realizados y Seguimiento</h3>
                 <p class="text-lg mb-4">
@@ -113,7 +113,6 @@
                                     <p class="font-semibold text-gray-900">{{ pago.citas.fecha }}</p>
                                     <p class="text-sm text-gray-500">{{ pago.metodo_pago }} - ${{ "%.2f"|format(pago.monto) }}</p>
                                 </div>
-                                <!-- ESTE ES EL NUEVO CÓDIGO CON LÓGICA CONDICIONAL -->
                                 {% if pago.cita_id in citas_con_seguimiento %}
                                     <!-- Si la cita ya tiene seguimiento, muestra un indicador -->
                                     <span class="bg-green-100 text-green-800 text-xs font-medium py-1 px-3 rounded-full">
@@ -158,9 +157,7 @@
     </div>
 </div>
 
-<!-- ================================================================= -->
-<!-- NUEVA VENTANA MODAL PARA EL FORMULARIO DE SEGUIMIENTO -->
-<!-- ================================================================= -->
+<!-- Modal de Seguimiento (sin cambios) -->
 <div id="seguimiento-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
   <div class="relative top-20 mx-auto p-5 border w-full max-w-lg shadow-lg rounded-md bg-white">
     <div class="mt-3 text-center">
@@ -181,7 +178,6 @@
             <div id="nueva-fecha-container" class="hidden">
                 <label for="nueva_fecha" class="block text-sm font-medium text-gray-700">Próxima Fecha de Cita</label>
                 <input type="date" name="nueva_fecha" id="nueva_fecha" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
-                <!-- NUEVO: Span para mostrar el error de validación -->
                 <span id="fecha-error-msg" class="text-red-600 text-xs mt-1"></span>
             </div>
             
@@ -205,10 +201,13 @@
   </div>
 </div>
 
+<!-- ================================================================= -->
+<!-- INICIO DE LA SECCIÓN MODIFICADA (JAVASCRIPT) -->
+<!-- ================================================================= -->
 <script>
     // --- DATOS PASADOS DESDE FLASK ---
     const citasData = {{ citas_por_pagar|tojson }};
-    const preciosConfig = {{ configuracion|tojson }};
+    const serviciosData = {{ servicios|tojson }}; // Usamos los datos de servicios con sus precios
     const appConfig = {{ configuracion|tojson }}; // Configuración para validación de fecha
     const blockedDates = {{ fechas_bloqueadas|tojson }}; // Fechas bloqueadas para validación
 
@@ -224,11 +223,7 @@
     const submitBtn = document.getElementById('ok-btn'); // Botón de guardar
     const errorMsgSpan = document.getElementById('fecha-error-msg'); // Span de error
 
-    // --- LÓGICA DEL FORMULARIO DE PAGO (sin cambios) ---
-    function actualizarFormulario(citaId) { /* ...código sin cambios... */ }
-    function actualizarMontoPorMotivo(motivoSeleccionado) { /* ...código sin cambios... */ }
-
-    // --- LÓGICA DEL MODAL ---
+    // --- LÓGICA DEL MODAL (sin cambios) ---
     function abrirModalSeguimiento(citaId, pacienteNombre) {
         document.getElementById('modal-cita-id').value = citaId;
         document.getElementById('modal-patient-name').textContent = pacienteNombre;
@@ -261,9 +256,7 @@
         }
     }
 
-    // =================================================================
-    // NUEVA FUNCIÓN DE VALIDACIÓN DE FECHA EN TIEMPO REAL
-    // =================================================================
+    // --- LÓGICA DE VALIDACIÓN DE FECHA (sin cambios) ---
     function validarFechaSeleccionada() {
         const fechaStr = fechaInput.value;
         if (!fechaStr) {
@@ -271,18 +264,13 @@
             submitBtn.disabled = false;
             return;
         }
-
-        // 1. Validar si es una fecha bloqueada manualmente
         if (blockedDates.includes(fechaStr)) {
             errorMsgSpan.textContent = 'Esta fecha está bloqueada.';
             submitBtn.disabled = true;
             return;
         }
-
-        // 2. Validar fines de semana
-        const fechaObj = new Date(fechaStr + 'T00:00:00'); // Añadir T00:00 para evitar problemas de zona horaria
-        const diaSemana = fechaObj.getDay(); // Domingo=0, Lunes=1, ..., Sábado=6
-
+        const fechaObj = new Date(fechaStr + 'T00:00:00');
+        const diaSemana = fechaObj.getDay();
         if (appConfig.bloquear_domingos === 'true' && diaSemana === 0) {
             errorMsgSpan.textContent = 'No se agendan citas los domingos.';
             submitBtn.disabled = true;
@@ -293,17 +281,13 @@
             submitBtn.disabled = true;
             return;
         }
-
-        // Si todo está bien, limpiar el error y habilitar el botón
         errorMsgSpan.textContent = '';
         submitBtn.disabled = false;
     }
 
-    // --- EVENT LISTENERS ---
+    // --- EVENT LISTENERS (sin cambios) ---
     checkbox.addEventListener('change', actualizarVisibilidadCampos);
-    fechaInput.addEventListener('change', validarFechaSeleccionada); // Validar al cambiar la fecha
-    
-    // Auto-filtrado por fecha (código ya existente)
+    fechaInput.addEventListener('change', validarFechaSeleccionada);
     document.addEventListener('DOMContentLoaded', function() {
         const dateInputFilter = document.getElementById('fecha-filtro');
         if (dateInputFilter) {
@@ -313,12 +297,7 @@
         }
     });
 
-    // const citasData = {{ citas_por_pagar|tojson }};
-    // const preciosConfig = {{ configuracion|tojson }};
-    
-    // const motivoSelect = document.getElementById('motivo');
-    // const montoInput = document.getElementById('monto');
-
+    // --- LÓGICA DEL FORMULARIO DE PAGO (CORREGIDA) ---
     function actualizarFormulario(citaId) {
         if (!citaId) {
             montoInput.value = '';
@@ -333,24 +312,37 @@
         if (citaSeleccionada) {
             motivoSelect.value = citaSeleccionada.motivo;
             motivoSelect.disabled = false;
-            
-            const clavePrecio = 'precio_' + citaSeleccionada.motivo;
-            const monto = preciosConfig[clavePrecio] || '';
-            montoInput.value = monto;
             montoInput.readOnly = false;
+
+            // Llamamos a la función de actualizar monto para mantener la lógica en un solo lugar
+            actualizarMontoPorMotivo(citaSeleccionada.motivo);
         }
     }
 
     function actualizarMontoPorMotivo(motivoSeleccionado) {
-        if (!motivoSeleccionado) {
-            montoInput.value = '';
-            return;
-        }
+        // Buscamos el servicio seleccionado en la lista de servicios
+        const servicio = serviciosData.find(s => s.nombre === motivoSeleccionado);
         
-        const clavePrecio = 'precio_' + motivoSeleccionado;
-        const monto = preciosConfig[clavePrecio] || '';
-        montoInput.value = monto;
+        if (servicio) {
+            // Si el precio es mayor a 0, cargamos el precio en el monto
+            const precio = parseFloat(servicio.precio);
+            if (precio > 0) {
+                montoInput.value = precio.toFixed(2);
+            } else {
+                montoInput.value = '0.00';
+            }
+        } else {
+            montoInput.value = '0.00';
+        }
     }
+
+    // Agregar event listener al select de motivo para que actualice el monto cuando cambie
+    motivoSelect.addEventListener('change', function() {
+        actualizarMontoPorMotivo(this.value);
+    });
 </script>
+<!-- ================================================================= -->
+<!-- FIN DE LA SECCIÓN MODIFICADA -->
+<!-- ================================================================= -->
 
 {% endblock %}

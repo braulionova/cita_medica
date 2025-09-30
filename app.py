@@ -1804,7 +1804,8 @@ def secretaria_registrar_pago():
         configuracion=config,
         filtro_fecha=filtro_fecha,
         date=date,
-        servicios=servicios
+        servicios=servicios,
+        fechas_bloqueadas=[]  # Added empty list as default value
     )
 
 
