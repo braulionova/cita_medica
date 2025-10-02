@@ -1,0 +1,215 @@
+{% extends "admin_layout.html" %}
+
+{% block title %}Gestionar Resultados de Pacientes{% endblock %}
+
+{% block content %}
+<div class="space-y-8">
+  <h1 class="text-3xl font-bold text-gray-800">Gestionar Resultados de Pacientes</h1>
+
+  <!-- INICIO: Formulario para registrar nuevo paciente -->
+  <div class="bg-white p-6 rounded-lg shadow-md border border-gray-200">
+    <h2 class="text-xl font-semibold mb-4 text-gray-700">Registrar Nuevo Paciente para Seguimiento</h2>
+    <form action="{{ url_for('gestion_resultados') }}" method="POST" class="space-y-4">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label for="cedula" class="block text-gray-700 mb-1 text-sm sm:text-base">Cédula de Identidad (Opcional)</label>
+          <input type="text" id="cedula" name="cedula"
+            placeholder="000-0000000-0"
+            pattern="^\d{3}-\d{7}-\d{1}$"
+            title="Formato requerido: 000-0000000-0"
+            class="w-full px-3 sm:px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm sm:text-base">
+          <p class="text-xs text-gray-500 mt-1">Si el paciente ya está registrado, sus datos se cargarán al salir del campo.</p>
+        </div>
+        <div>
+          <label for="nombre_completo" class="block text-sm font-medium text-gray-700">Nombre Completo (Obligatorio)</label>
+          <input type="text" id="nombre_completo" name="nombre_completo" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+        </div>
+        <div>
+          <label for="telefono" class="block text-sm font-medium text-gray-700">Teléfono (Obligatorio)</label>
+          <input type="tel" id="telefono" name="telefono" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+        </div>
+        
+        <div>
+          <label for="fecha_entrega" class="block text-sm font-medium text-gray-700">Fecha de Entrega (Opcional)</label>
+          <input type="date" id="fecha_entrega" name="fecha_entrega" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+        </div>
+      </div>
+      <div>
+        <label for="estudios" class="block text-sm font-medium text-gray-700">Estudios / Analíticas Realizadas</label>
+        <textarea id="estudios" name="estudios" rows="3" placeholder="Ej: Biopsia de cérvix, Papanicolau..." class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"></textarea>
+      </div>
+      <div>
+        <button type="submit" class="w-full md:w-auto inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+          Registrar Paciente
+        </button>
+      </div>
+    </form>
+  </div>
+  <!-- FIN: Formulario -->
+
+  <!-- INICIO: Resultados Pendientes de Llegar -->
+  <div class="bg-white p-6 rounded-lg shadow-md border border-yellow-300">
+    <h2 class="text-xl font-semibold mb-4 text-yellow-800">⏳ Resultados Pendientes de Llegar ({{ pendientes|length }})</h2>
+    {% if pendientes %}
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Paciente</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estudios</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acción</th>
+          </tr>
+        </thead>
+        <tbody class="bg-white divide-y divide-gray-200">
+          {% for p in pendientes %}
+          <tr>
+            <td class="px-6 py-4 whitespace-nowrap"><div class="text-sm font-medium text-gray-900">{{ p.nombre_completo }}</div><div class="text-sm text-gray-500">{{ p.telefono }}</div></td>
+            <td class="px-6 py-4 whitespace-normal text-sm text-gray-500">{{ p.estudios or 'No especificado' }}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+              <form action="{{ url_for('marcar_resultado_llegada', id=p.id) }}" method="POST">
+                <button type="submit" class="text-white bg-green-600 hover:bg-green-700 font-medium rounded-lg text-sm px-3 py-1.5 text-center">Marcar como Recibido</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-gray-500">No hay resultados pendientes de llegar.</p>
+    {% endif %}
+  </div>
+  <!-- FIN: Resultados Pendientes -->
+
+  <!-- INICIO: Resultados Listos para Notificar -->
+  <div class="bg-white p-6 rounded-lg shadow-md border border-green-300">
+    <h2 class="text-xl font-semibold mb-4 text-green-800">🔔 Resultados Listos para Notificar ({{ listos|length }})</h2>
+    {% if listos %}
+    <form id="notification-form" action="{{ url_for('enviar_notificaciones_resultados') }}" method="POST">
+      <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200">
+          <thead class="bg-gray-50">
+            <tr>
+              <th class="p-4"><input type="checkbox" id="select-all-checkbox" class="h-4 w-4 text-indigo-600 border-gray-300 rounded"></th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Paciente</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estudios</th>
+            </tr>
+          </thead>
+          <tbody class="bg-white divide-y divide-gray-200">
+            {% for p in listos %}
+            <tr>
+              <td class="p-4"><input type="checkbox" name="paciente_ids" value="{{ p.id }}" class="paciente-checkbox h-4 w-4 text-indigo-600 border-gray-300 rounded"></td>
+              <td class="px-6 py-4 whitespace-nowrap"><div class="text-sm font-medium text-gray-900">{{ p.nombre_completo }}</div><div class="text-sm text-gray-500">{{ p.telefono }}</div></td>
+              <td class="px-6 py-4 whitespace-normal text-sm text-gray-500">{{ p.estudios or 'No especificado' }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="mt-4">
+        <button type="submit" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+          📲 Enviar Notificaciones a Seleccionados
+        </button>
+      </div>
+    </form>
+    {% else %}
+    <p class="text-gray-500">No hay resultados listos para notificar.</p>
+    {% endif %}
+  </div>
+  <!-- FIN: Resultados Listos -->
+
+  <!-- INICIO: Resultados Ya Notificados -->
+  <div class="bg-gray-50 p-6 rounded-lg shadow-inner border">
+    <h2 class="text-xl font-semibold mb-4 text-gray-600">✅ Resultados Ya Notificados ({{ notificados|length }})</h2>
+    {% if notificados %}
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-100">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Paciente</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estudios</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acción</th>
+          </tr>
+        </thead>
+        <tbody class="bg-white divide-y divide-gray-200">
+          {% for p in notificados %}
+          <tr>
+            <td class="px-6 py-4 whitespace-nowrap"><div class="text-sm font-medium text-gray-900">{{ p.nombre_completo }}</div><div class="text-sm text-gray-500">{{ p.telefono }}</div></td>
+            <td class="px-6 py-4 whitespace-normal text-sm text-gray-500">{{ p.estudios or 'No especificado' }}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+              <form action="{{ url_for('reenviar_notificacion_resultado', id=p.id) }}" method="POST">
+                <button type="submit" class="text-indigo-600 hover:text-indigo-900">Reenviar Notificación</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-gray-500">Aún no se ha notificado a ningún paciente.</p>
+    {% endif %}
+  </div>
+  <!-- FIN: Resultados Notificados -->
+
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const selectAllCheckbox = document.getElementById('select-all-checkbox');
+  const patientCheckboxes = document.querySelectorAll('.paciente-checkbox');
+
+  if (selectAllCheckbox) {
+    selectAllCheckbox.addEventListener('change', function () {
+      patientCheckboxes.forEach(checkbox => {
+        checkbox.checked = this.checked;
+      });
+    });
+  }
+
+  patientCheckboxes.forEach(checkbox => {
+    checkbox.addEventListener('change', function () {
+      if (!this.checked) {
+        selectAllCheckbox.checked = false;
+      } else {
+        // Check if all are checked
+        const allChecked = Array.from(patientCheckboxes).every(c => c.checked);
+        selectAllCheckbox.checked = allChecked;
+      }
+    });
+  });
+
+  // --- Elementos del DOM ---
+    const cedulaInput = document.getElementById('cedula');
+    const nombreInput = document.getElementById('nombre_completo');
+    const telefonoInput = document.getElementById('telefono');
+
+    // --- 1. LÓGICA PARA LA MÁSCARA DE CÉDULA ---
+    cedulaInput.addEventListener('input', function (e) {
+        let value = e.target.value.replace(/\D/g, '').slice(0, 11);
+        if (value.length > 3) value = value.slice(0, 3) + '-' + value.slice(3);
+        if (value.length > 11) value = value.slice(0, 11) + '-' + value.slice(11);
+        e.target.value = value;
+    });
+
+    // --- 2. LÓGICA PARA AUTOCOMPLETAR DATOS ---
+    cedulaInput.addEventListener('blur', async function() {
+        const cedula = this.value.trim();
+        if (cedula.length !== 13) return; // Solo buscar con formato completo
+        try {
+            const response = await fetch(`/api/buscar_paciente/${cedula}`);
+            if (response.ok) {
+                const paciente = await response.json();
+                nombreInput.value = paciente.nombre_completo || '';
+                telefonoInput.value = paciente.telefono || '';
+                
+            } else {
+                console.log('Paciente no encontrado, listo para nuevo registro.');
+            }
+        } catch (error) {
+            console.error('Error al buscar el paciente:', error);
+        }
+    });
+});
+</script>
+{% endblock %}

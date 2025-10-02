@@ -2896,5 +2896,292 @@ def format_date(date_string):
 # --- FIN: FILTRO DE PLANTILLA ---
 # =======================================================
 
+def send_whatsapp_results_notification(recipient_phone, patient_name):
+    """Envía una notificación de resultados listos vía WhatsApp."""
+    headers = {
+        "Authorization": f"Bearer {ACCESS_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": recipient_phone,
+        "type": "template",
+        "template": {
+            "name": "recordatorio_",  # <-- EL NOMBRE EXACTO DE TU NUEVA PLANTILLA
+            "language": { "code": "es_DO" }
+        }
+    }
+    try:
+        url = f"https://graph.facebook.com/v22.0/{PHONE_NUMBER_ID}/messages"
+        response = requests.post(url, headers=headers, json=payload, timeout=20)
+        response.raise_for_status()
+        print(f"✅ Notificación de resultados enviada a {patient_name} ({recipient_phone}). Status: {response.status_code}")
+        return True
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Error al enviar notificación de resultados a {patient_name} ({recipient_phone}): {e}")
+        if e.response is not None:
+            print("Error detallado de la API:", e.response.json())
+        return False
+
+# ==========================================================
+# --- INICIO: RUTAS PARA GESTIÓN DE RESULTADOS DE PACIENTES ---
+# ==========================================================
+
+@app.route('/admin/gestion_resultados', methods=['GET', 'POST'])
+@role_required('admin', 'secretaria')
+def gestion_resultados():
+    # --- Lógica para registrar un nuevo paciente para resultados (POST) ---
+    if request.method == 'POST':
+        nombre = request.form.get('nombre_completo', '').strip()
+        telefono = request.form.get('telefono', '').strip()
+        
+        if not nombre or not telefono:
+            flash('❌ El nombre y el teléfono son obligatorios.', 'error')
+            return redirect(url_for('gestion_resultados'))
+        
+        try:
+            data = {
+                'cedula': request.form.get('cedula'),
+                'nombre_completo': nombre,
+                'telefono': telefono,
+                'fecha_entrega': request.form.get('fecha_entrega') or None,
+                'estudios': request.form.get('estudios')
+            }
+            supabase.table('resultados_pacientes').insert(data).execute()
+            flash('✅ Paciente registrado para seguimiento de resultados.', 'success')
+        except Exception as e:
+            flash(f'❌ Error al registrar al paciente: {e}', 'error')
+        
+        return redirect(url_for('gestion_resultados'))
+
+    # --- Lógica para mostrar las listas de pacientes (GET) ---
+    pendientes_de_llegar = []
+    listos_para_notificar = []
+    ya_notificados = []
+    
+    try:
+        response = supabase.table('resultados_pacientes').select('*').order('created_at', desc=True).execute()
+        todos_los_resultados = response.data
+        
+        # Clasificar pacientes en las tres listas
+        for r in todos_los_resultados:
+            if not r.get('resultado_llego'):
+                pendientes_de_llegar.append(r)
+            elif not r.get('notificacion_enviada'):
+                listos_para_notificar.append(r)
+            else:
+                ya_notificados.append(r)
+                
+    except Exception as e:
+        flash(f'❌ Error al cargar la lista de resultados: {e}', 'error')
+
+    return render_template(
+        'gestion_resultados.html',
+        pendientes=pendientes_de_llegar,
+        listos=listos_para_notificar,
+        notificados=ya_notificados
+    )
+
+@app.route('/admin/marcar_resultado_llegada/<int:id>', methods=['POST'])
+@role_required('admin', 'secretaria')
+def marcar_resultado_llegada(id):
+    try:
+        supabase.table('resultados_pacientes').update({'resultado_llego': True}).eq('id', id).execute()
+        flash('✅ Resultado marcado como recibido.', 'success')
+    except Exception as e:
+        flash(f'❌ Error al actualizar el estado: {e}', 'error')
+    return redirect(url_for('gestion_resultados'))
+
+@app.route('/admin/enviar_notificaciones_resultados', methods=['POST'])
+@role_required('admin', 'secretaria')
+def enviar_notificaciones_resultados():
+    paciente_ids = request.form.getlist('paciente_ids')
+    if not paciente_ids:
+        flash('⚠️ No seleccionaste ningún paciente para notificar.', 'warning')
+        return redirect(url_for('gestion_resultados'))
+        
+    nombres_notificados = []
+    errores = []
+
+    for paciente_id in paciente_ids:
+        try:
+            # Obtener datos del paciente
+            paciente = supabase.table('resultados_pacientes').select('*').eq('id', int(paciente_id)).single().execute().data
+            if paciente:
+                success = send_whatsapp_results_notification(paciente['telefono'], paciente['nombre_completo'])
+                if success:
+                    # Marcar como notificado en la BD
+                    supabase.table('resultados_pacientes').update({'notificacion_enviada': True}).eq('id', paciente['id']).execute()
+                    nombres_notificados.append(paciente['nombre_completo'])
+                else:
+                    errores.append(paciente['nombre_completo'])
+        except Exception as e:
+            print(f"Error procesando notificación para ID {paciente_id}: {e}")
+            errores.append(f"ID {paciente_id} (Error interno)")
+
+    if nombres_notificados:
+        flash(f'✅ Notificaciones enviadas correctamente a {len(nombres_notificados)} pacientes.', 'success')
+        # Notificación a Telegram
+        mensaje_telegram = "📢 *Notificación de Resultados Enviada*\n\nSe ha notificado por WhatsApp a los siguientes pacientes:\n\n- " + "\n- ".join(nombres_notificados)
+        send_telegram_message(mensaje_telegram)
+
+    if errores:
+        flash(f'❌ Hubo errores al notificar a: {", ".join(errores)}', 'error')
+        
+    return redirect(url_for('gestion_resultados'))
+
+@app.route('/admin/reenviar_notificacion_resultado/<int:id>', methods=['POST'])
+@role_required('admin', 'secretaria')
+def reenviar_notificacion_resultado(id):
+    try:
+        paciente = supabase.table('resultados_pacientes').select('*').eq('id', id).single().execute().data
+        if paciente:
+            success = send_whatsapp_results_notification(paciente['telefono'], paciente['nombre_completo'])
+            if success:
+                flash(f'✅ Notificación reenviada a {paciente["nombre_completo"]}.', 'success')
+                send_telegram_message(f"🔁 Notificación de resultados REENVIADA a: {paciente['nombre_completo']}")
+            else:
+                flash(f'❌ No se pudo reenviar la notificación a {paciente["nombre_completo"]}.', 'error')
+        else:
+            flash('❌ Paciente no encontrado.', 'error')
+    except Exception as e:
+        flash(f'❌ Error al reenviar: {e}', 'error')
+    
+    return redirect(url_for('gestion_resultados'))
+
+# ==========================================================
+# --- FIN: RUTAS PARA GESTIÓN DE RESULTADOS DE PACIENTES ---
+# ==========================================================
+
+# ==========================================================
+# --- INICIO: RUTAS PARA GESTIÓN DE RESULTADOS DE PACIENTES - SECRETARIA ---
+# ==========================================================
+
+@app.route('/secretaria/gestion_resultados', methods=['GET', 'POST'])
+@role_required('secretaria')
+def secretaria_gestion_resultados():
+    # --- Lógica para registrar un nuevo paciente para resultados (POST) ---
+    if request.method == 'POST':
+        nombre = request.form.get('nombre_completo', '').strip()
+        telefono = request.form.get('telefono', '').strip()
+        
+        if not nombre or not telefono:
+            flash('❌ El nombre y el teléfono son obligatorios.', 'error')
+            return redirect(url_for('gestion_resultados'))
+        
+        try:
+            data = {
+                'cedula': request.form.get('cedula'),
+                'nombre_completo': nombre,
+                'telefono': telefono,
+                'fecha_entrega': request.form.get('fecha_entrega') or None,
+                'estudios': request.form.get('estudios')
+            }
+            supabase.table('resultados_pacientes').insert(data).execute()
+            flash('✅ Paciente registrado para seguimiento de resultados.', 'success')
+        except Exception as e:
+            flash(f'❌ Error al registrar al paciente: {e}', 'error')
+        
+        return redirect(url_for('secretaria_gestion_resultados'))
+
+    # --- Lógica para mostrar las listas de pacientes (GET) ---
+    pendientes_de_llegar = []
+    listos_para_notificar = []
+    ya_notificados = []
+    
+    try:
+        response = supabase.table('resultados_pacientes').select('*').order('created_at', desc=True).execute()
+        todos_los_resultados = response.data
+        
+        # Clasificar pacientes en las tres listas
+        for r in todos_los_resultados:
+            if not r.get('resultado_llego'):
+                pendientes_de_llegar.append(r)
+            elif not r.get('notificacion_enviada'):
+                listos_para_notificar.append(r)
+            else:
+                ya_notificados.append(r)
+                
+    except Exception as e:
+        flash(f'❌ Error al cargar la lista de resultados: {e}', 'error')
+
+    return render_template(
+        'secretaria_gestion_resultados.html',
+        pendientes=pendientes_de_llegar,
+        listos=listos_para_notificar,
+        notificados=ya_notificados
+    )
+
+@app.route('/secretaria/marcar_resultado_llegada/<int:id>', methods=['POST'])
+@role_required('secretaria')
+def secretaria_marcar_resultado_llegada(id):
+    try:
+        supabase.table('resultados_pacientes').update({'resultado_llego': True}).eq('id', id).execute()
+        flash('✅ Resultado marcado como recibido.', 'success')
+    except Exception as e:
+        flash(f'❌ Error al actualizar el estado: {e}', 'error')
+    return redirect(url_for('secretaria_gestion_resultados'))
+
+@app.route('/secretaria/enviar_notificaciones_resultados', methods=['POST'])
+@role_required('secretaria')
+def secretaria_enviar_notificaciones_resultados():
+    paciente_ids = request.form.getlist('paciente_ids')
+    if not paciente_ids:
+        flash('⚠️ No seleccionaste ningún paciente para notificar.', 'warning')
+        return redirect(url_for('secretaria_gestion_resultados'))
+
+    nombres_notificados = []
+    errores = []
+
+    for paciente_id in paciente_ids:
+        try:
+            # Obtener datos del paciente
+            paciente = supabase.table('resultados_pacientes').select('*').eq('id', int(paciente_id)).single().execute().data
+            if paciente:
+                success = send_whatsapp_results_notification(paciente['telefono'], paciente['nombre_completo'])
+                if success:
+                    # Marcar como notificado en la BD
+                    supabase.table('resultados_pacientes').update({'notificacion_enviada': True}).eq('id', paciente['id']).execute()
+                    nombres_notificados.append(paciente['nombre_completo'])
+                else:
+                    errores.append(paciente['nombre_completo'])
+        except Exception as e:
+            print(f"Error procesando notificación para ID {paciente_id}: {e}")
+            errores.append(f"ID {paciente_id} (Error interno)")
+
+    if nombres_notificados:
+        flash(f'✅ Notificaciones enviadas correctamente a {len(nombres_notificados)} pacientes.', 'success')
+        # Notificación a Telegram
+        mensaje_telegram = "📢 *Notificación de Resultados Enviada*\n\nSe ha notificado por WhatsApp a los siguientes pacientes:\n\n- " + "\n- ".join(nombres_notificados)
+        send_telegram_message(mensaje_telegram)
+
+    if errores:
+        flash(f'❌ Hubo errores al notificar a: {", ".join(errores)}', 'error')
+        
+    return redirect(url_for('secretaria_gestion_resultados'))
+
+@app.route('/secretaria/reenviar_notificacion_resultado/<int:id>', methods=['POST'])
+@role_required('secretaria')
+def secretaria_reenviar_notificacion_resultado(id):
+    try:
+        paciente = supabase.table('resultados_pacientes').select('*').eq('id', id).single().execute().data
+        if paciente:
+            success = send_whatsapp_results_notification(paciente['telefono'], paciente['nombre_completo'])
+            if success:
+                flash(f'✅ Notificación reenviada a {paciente["nombre_completo"]}.', 'success')
+                send_telegram_message(f"🔁 Notificación de resultados REENVIADA a: {paciente['nombre_completo']}")
+            else:
+                flash(f'❌ No se pudo reenviar la notificación a {paciente["nombre_completo"]}.', 'error')
+        else:
+            flash('❌ Paciente no encontrado.', 'error')
+    except Exception as e:
+        flash(f'❌ Error al reenviar: {e}', 'error')
+    
+    return redirect(url_for('secretaria_gestion_resultados'))
+
+# ==========================================================
+# --- FIN: RUTAS PARA GESTIÓN DE RESULTADOS DE PACIENTES - SECRETARIA ---
+# ==========================================================
+
 if __name__ == "__main__":
     app.run(debug=True)
