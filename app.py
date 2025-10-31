@@ -481,6 +481,33 @@ def registrar_cita():
             # Si hay un error de permisos, continuar con el registro de la cita
             if isinstance(e, APIError) and e.json()['code'] == '42501':
                 print("Continuando con el registro de la cita a pesar del error de permisos...")
+        
+        # --- NUEVO: VALIDACIÓN DE CITA DUPLICADA ---
+        try:
+            # Construimos la consulta base para la fecha
+            query = supabase.table("citas").select("id", count='exact').eq("fecha", fecha_str)
+
+            # Añadimos el identificador del paciente a la consulta
+            if cedula_raw:
+                # Si hay cédula, es el mejor identificador
+                query = query.eq("cedula", cedula_raw)
+            else:
+                # Si no, usamos la combinación de nombre y teléfono
+                query = query.eq("nombre", nombre).eq("telefono", telefono)
+            
+            # Ejecutamos la consulta
+            existing_cita_result = query.execute()
+
+            # Si el contador es mayor que 0, ya existe una cita
+            if existing_cita_result.count > 0:
+                flash("❌ Ya tienes una cita registrada para esta fecha. Por favor, elige otra.", "error")
+                return redirect(url_for("registrar_cita"))
+
+        except Exception as e:
+            print(f"Error al verificar cita duplicada: {e}")
+            flash("❌ Ocurrió un error al verificar sus citas existentes. Intente de nuevo.", "error")
+            return redirect(url_for("registrar_cita"))
+        # --- FIN DE LA VALIDACIÓN NUEVA ---
 
         # --- Registrar cita ---
         data_cita = {
