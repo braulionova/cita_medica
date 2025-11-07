@@ -1,0 +1,109 @@
+<!-- templates/patients_list.html -->
+{% extends 'admin_layout.html' if session.role == 'admin' else 'secretaria_layout.html' %}
+
+{% block title %}Historial de Pacientes{% endblock %}
+
+{% block content %}
+<div class="bg-white p-8 rounded-lg shadow-md">
+  <div class="flex justify-between items-center mb-4">
+      <h1 class="text-2xl font-bold">Historial de Pacientes</h1>
+  </div>
+
+  <!-- INICIO: Campo de Búsqueda (sin formulario) -->
+  <div class="mb-6">
+    <input 
+      type="text" 
+      id="searchInput"
+      placeholder="Escribe para buscar por nombre o cédula..."
+      class="block w-full px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-md focus:border-blue-500 focus:ring-blue-500 focus:outline-none focus:ring focus:ring-opacity-40"
+    >
+  </div>
+  <!-- FIN: Campo de Búsqueda -->
+
+  <!-- Flash messages -->
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, message in messages %}
+        <div class="p-4 mb-4 text-sm rounded-lg 
+          {% if category == 'success' %} bg-green-100 text-green-700 
+          {% elif category == 'error' %} bg-red-100 text-red-700 
+          {% else %} bg-blue-100 text-blue-700 
+          {% endif %}" role="alert">
+          {{ message }}
+        </div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  <div class="overflow-x-auto">
+    <table class="min-w-full bg-white">
+      <thead class="bg-gray-800 text-white">
+        <tr>
+          <th class="text-left py-3 px-4 uppercase font-semibold text-sm">Nombre Completo</th>
+          <th class="text-left py-3 px-4 uppercase font-semibold text-sm">Cédula</th>
+          <th class="text-left py-3 px-4 uppercase font-semibold text-sm">Fecha de Creación</th>
+        </tr>
+      </thead>
+      <!-- Añadimos un ID al cuerpo de la tabla para que JavaScript lo encuentre fácil -->
+      <tbody id="patientTableBody" class="text-gray-700">
+        {% if patients %}
+          {% for patient in patients %}
+          <tr class="patient-row border-b border-gray-200 hover:bg-gray-100 cursor-pointer" onclick="window.location='{{ url_for('patient_detail', patient_id=patient.id) }}';">
+            <td class="patient-name py-3 px-4">{{ patient.full_name }}</td>
+            <td class="patient-cedula py-3 px-4">{{ patient.cedula }}</td>
+            <td class="py-3 px-4">{{ (patient.created_at.split('T')[0]) | formatdate }}</td>
+          </tr>
+          {% endfor %}
+        {% else %}
+        <tr>
+          <td colspan="3" class="text-center py-4">No se encontraron pacientes en el historial.</td>
+        </tr>
+        {% endif %}
+        <!-- Fila especial para mostrar cuando no hay resultados de búsqueda -->
+        <tr id="noResultsRow" class="hidden">
+            <td colspan="3" class="text-center py-4 text-gray-500 font-semibold">No se encontraron coincidencias.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- INICIO: SCRIPT DE JAVASCRIPT PARA FILTRADO EN VIVO -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('searchInput');
+    const tableBody = document.getElementById('patientTableBody');
+    const patientRows = tableBody.querySelectorAll('.patient-row');
+    const noResultsRow = document.getElementById('noResultsRow');
+
+    // Escuchamos el evento 'keyup', que se dispara cada vez que se suelta una tecla
+    searchInput.addEventListener('keyup', function() {
+        const searchTerm = searchInput.value.toLowerCase().trim();
+        let visibleRows = 0;
+
+        patientRows.forEach(function(row) {
+            // Obtenemos el texto del nombre y la cédula de cada fila
+            const name = row.querySelector('.patient-name').textContent.toLowerCase();
+            const cedula = row.querySelector('.patient-cedula').textContent.toLowerCase();
+
+            // Comprobamos si el término de búsqueda está incluido en el nombre o la cédula
+            if (name.includes(searchTerm) || cedula.includes(searchTerm)) {
+                row.classList.remove('hidden'); // Mostramos la fila si hay coincidencia
+                visibleRows++;
+            } else {
+                row.classList.add('hidden'); // Ocultamos la fila si no hay coincidencia
+            }
+        });
+
+        // Mostramos o ocultamos el mensaje de "No se encontraron coincidencias"
+        if (visibleRows === 0) {
+            noResultsRow.classList.remove('hidden');
+        } else {
+            noResultsRow.classList.add('hidden');
+        }
+    });
+});
+</script>
+<!-- FIN: SCRIPT -->
+
+{% endblock %}

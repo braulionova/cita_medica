@@ -1,0 +1,85 @@
+<!-- templates/patient_detail.html -->
+{% extends 'admin_layout.html' if session.role == 'admin' else 'secretaria_layout.html' %}
+
+{% block title %}Detalle del Paciente{% endblock %}
+
+{% block content %}
+<div class="bg-white p-8 rounded-lg shadow-md max-w-4xl mx-auto">
+  <div class="flex justify-between items-start">
+    <h1 class="text-2xl font-bold mb-2">Detalle del Paciente</h1>
+    <a href="{{ url_for('list_patients') }}" class="text-blue-600 hover:underline">&larr; Volver al listado</a>
+  </div>
+  
+  <div class="border-t border-gray-200 mt-4 pt-4">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 text-sm">
+      <div>
+        <strong class="text-gray-600">Nombre Completo:</strong>
+        <p>{{ patient.full_name }}</p>
+      </div>
+      <div>
+        <strong class="text-gray-600">Cédula:</strong>
+        <p>{{ patient.cedula }}</p>
+      </div>
+      <div>
+        <strong class="text-gray-600">Fecha de Creación:</strong>
+        <p>{{ (patient.created_at.split('T')[0]) | formatdate }}</p>
+      </div>
+    </div>
+
+    <div class="mb-16">
+      <div class="flex justify-between items-center mb-2">
+        <h2 class="text-xl font-semibold">Texto Escaneado</h2>
+        <button id="copyButton" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded text-sm transition">
+          Copiar Texto
+        </button>
+      </div>
+      <pre id="processedText" class="bg-gray-100 p-4 rounded-md border border-gray-300 whitespace-pre-wrap select-text h-160 overflow-y-auto font-sans">{{ patient.processed_text }}</pre>
+    </div>
+
+    <div>
+      <h2 class="text-xl font-semibold mb-4">Imágenes Escaneadas</h2>
+      {% if patient.image_urls %}
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {% for image_url in patient.image_urls %}
+            <a href="{{ image_url }}" target="_blank" rel="noopener noreferrer">
+              <img src="{{ image_url }}" alt="Imagen escaneada del paciente" class="w-full h-auto object-cover rounded-lg shadow-md border hover:shadow-xl transition">
+            </a>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="text-gray-500">No hay imágenes asociadas a este registro.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const copyButton = document.getElementById('copyButton');
+    const processedTextElement = document.getElementById('processedText');
+
+    if (copyButton && processedTextElement) {
+      copyButton.addEventListener('click', () => {
+        // Usa el API del portapapeles, que es más moderno y seguro
+        navigator.clipboard.writeText(processedTextElement.innerText)
+          .then(() => {
+            // Feedback visual para el usuario
+            copyButton.innerText = '¡Copiado!';
+            copyButton.classList.remove('bg-blue-500', 'hover:bg-blue-600');
+            copyButton.classList.add('bg-green-500');
+
+            setTimeout(() => {
+              copyButton.innerText = 'Copiar Texto';
+              copyButton.classList.remove('bg-green-500');
+              copyButton.classList.add('bg-blue-500', 'hover:bg-blue-600');
+            }, 2000); // Revierte el texto después de 2 segundos
+          })
+          .catch(err => {
+            console.error('Error al copiar el texto: ', err);
+            alert('No se pudo copiar el texto. Por favor, selecciónelo y cópielo manualmente.');
+          });
+      });
+    }
+  });
+</script>
+{% endblock %}

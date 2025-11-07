@@ -3210,5 +3210,52 @@ def secretaria_reenviar_notificacion_resultado(id):
 # --- FIN: RUTAS PARA GESTIÓN DE RESULTADOS DE PACIENTES - SECRETARIA ---
 # ==========================================================
 
+# ==========================================================
+# --- INICIO: RUTAS PARA HISTORIAL DE PACIENTES ---
+# ==========================================================
+
+@app.route('/admin/patients')
+@role_required('admin', 'secretaria')
+def list_patients():
+    """Muestra una lista de todos los pacientes del historial. La búsqueda se maneja en el frontend."""
+    # Aunque el filtrado principal es con JS, cargamos la lista completa para la página inicial.
+    # El código de búsqueda se elimina del backend para simplificar, ya que JS lo manejará.
+    try:
+        # Siempre cargamos todos los pacientes. JavaScript se encargará de filtrar.
+        response = supabase.table('patients').select('*').order('created_at', desc=True).execute()
+        patients = response.data
+    except Exception as e:
+        flash(f'❌ Error al cargar el historial de pacientes: {e}', 'error')
+        patients = []
+    
+    # Ya no necesitamos pasar 'search_term', el frontend se encarga de todo.
+    return render_template('patients_list.html', patients=patients)
+
+
+@app.route('/admin/patient/<int:patient_id>')
+@role_required('admin', 'secretaria')
+def patient_detail(patient_id):
+    """Muestra los detalles de un paciente específico."""
+    try:
+        # Obtenemos los datos del paciente por su ID
+        response = supabase.table('patients').select('*').eq('id', patient_id).single().execute()
+        patient = response.data
+        
+        # Si no se encuentra el paciente, mostramos un error y redirigimos
+        if not patient:
+            flash('❌ Paciente no encontrado en el historial.', 'error')
+            return redirect(url_for('list_patients'))
+            
+    except Exception as e:
+        flash(f'❌ Error al buscar los detalles del paciente: {e}', 'error')
+        return redirect(url_for('list_patients'))
+        
+    # Renderizamos la nueva plantilla de detalles
+    return render_template('patient_detail.html', patient=patient)
+
+# ==========================================================
+# --- FIN: RUTAS PARA HISTORIAL DE PACIENTES ---
+# ==========================================================
+
 if __name__ == "__main__":
     app.run(debug=True)
