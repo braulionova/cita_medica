@@ -127,6 +127,90 @@ def send_whatsapp_reminder(recipient_phone, patient_name, date_str):
             print("Error detallado de la API:", e.response.json())
         return False
 
+def send_whatsapp_reminder_secretaria(full_name, telefono, fecha_cita, motivo_consulta, numero_seguro_medico, nombre_seguro_medico):
+    """Envía un recordatorio de cita vía WhatsApp usando la API de WhatsApp Business."""
+    
+    # Validamos y formateamos la fecha antes de enviarla.
+    try:
+        fecha_obj = datetime.strptime(fecha_cita, '%Y-%m-%d')
+        fecha_cita = fecha_obj.strftime('%d-%m-%Y')
+    except (ValueError, TypeError):
+        print(f"Advertencia: Formato de fecha inesperado ('{fecha_cita}'). Se usará el valor original.")
+    
+    # Asegurar que ningún parámetro sea None o vacío (la API de WhatsApp no acepta valores vacíos)
+    full_name = str(full_name).strip() if full_name else "No especificado"
+    telefono = str(telefono).strip() if telefono else "No especificado"
+    fecha_cita = str(fecha_cita).strip() if fecha_cita else "No especificado"
+    motivo_consulta = str(motivo_consulta).strip() if motivo_consulta else "No especificado"
+    numero_seguro_medico = str(numero_seguro_medico).strip() if numero_seguro_medico else "No especificado"
+    nombre_seguro_medico = str(nombre_seguro_medico).strip() if nombre_seguro_medico else "No especificado"
+    
+    # Debug: imprimir los valores que se enviarán
+    print(f"DEBUG Secretaria - Params: name='{full_name}', tel='{telefono}', fecha='{fecha_cita}', motivo='{motivo_consulta}', num_seguro='{numero_seguro_medico}', nombre_seguro='{nombre_seguro_medico}'")
+        
+    headers = {
+        "Authorization": f"Bearer {ACCESS_TOKEN}",
+        "Content-Type": "application/json"
+    }
+
+    recipient_phone = "8097695217" # Número de la secretaria
+    #recipient_phone = "8299691469" # Número de la secretaria
+
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": recipient_phone,
+        "type": "template",
+        "template": {
+            "name": "notificacion_cita_registrada",
+            "language": {"code": "es_DO"},
+            "components": [
+                {
+                    "type": "body",
+                    "parameters": [
+                        {"type": "text", "parameter_name": "full_name", "text": full_name},
+                        {"type": "text", "parameter_name": "telefono", "text": telefono},
+                        {"type": "text", "parameter_name": "fecha_cita", "text": fecha_cita},
+                        {"type": "text", "parameter_name": "motivo_consulta", "text": motivo_consulta},
+                        {"type": "text", "parameter_name": "numero_seguro_medico", "text": numero_seguro_medico},
+                        {"type": "text", "parameter_name": "nombre_seguro_medico", "text": nombre_seguro_medico}
+                    ]
+                }
+            ]
+        }
+    }
+
+    # Cita médica registrada con éxito.
+
+    # *Nombre del paciente:*  {{full_name}}
+    # *Teléfono:* {{telefono}}
+    # *Fecha:* {{fecha_cita}}
+    # *Motivo:*  {{motivo_consulta}}
+    # *Número de Seguro Médico: * {{numero_seguro_medico}}
+    # *Nombre del Seguro Médico: * {{nombre_seguro_medico}}
+
+    # *Notificación de cita médica registrada.*
+
+    #response = requests.post(url, headers=headers, json=payload)
+
+    #print("Status code:", response.status_code)
+    #print("Response:", json.dumps(response.json(), indent=2, ensure_ascii=False))
+    try:
+        url = f"https://graph.facebook.com/v22.0/{PHONE_NUMBER_ID}/messages"
+        response = requests.post(url, headers=headers, json=payload)
+
+        print("Status code:", response.status_code)
+        if response.status_code != 200:
+            print("Response Error:", response.json())
+        
+        print(f"✅ Recordatorio enviado a {full_name} ({recipient_phone}). Status: {response.status_code}")
+        return True
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Error al enviar mensaje a {full_name} ({recipient_phone}): {e}")
+        if e.response is not None:
+            print("Error detallado de la API:", e.response.json())
+        return False
+
+
 # Crea una cola para almacenar los anuncios de pacientes.
 # Esta cola es segura para usar entre diferentes peticiones.
 announcement_queue = Queue()
@@ -536,8 +620,11 @@ def registrar_cita():
                 "Número de Seguro Médico": numero_seguro_medico,
                 "Nombre del Seguro Médico": nombre_seguro_medico
             }
-
+            #enviar mensaje al paciente
             send_whatsapp_reminder(telefono, nombre, fecha_str)
+            #enviar mensaje a la secretaria
+            send_whatsapp_reminder_secretaria(nombre, telefono, fecha_str, motivo, numero_seguro_medico, nombre_seguro_medico)
+            #enviar mensaje a telegram
             send_telegram_message("📅 Nueva cita registrada:\n" + "\n".join([f"{k}: {v}" for k, v in mensaje.items()]))
 
         except Exception as e:

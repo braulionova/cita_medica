@@ -1,0 +1,79 @@
+# Guía de Prompts para Generar App Android (Kotlin + Compose + Modular + Sidebar)
+
+Sigue estos prompts en orden para generar tu aplicación paso a paso con Gemini.
+
+## Prompt 1: Configuración Inicial y Estructura del Proyecto
+
+"Actúa como un experto en Android y Jetpack Compose. Quiero crear una aplicación moderna desde cero.
+**Stack Tecnológico:**
+- Lenguaje: Kotlin
+- UI: Jetpack Compose (Material3)
+- Navegación: Jetpack Navigation Compose
+- Gestión de Dependencias: Version Catalog (libs.versions.toml)
+- Arquitectura: Modular (por ahora simulada en paquetes para simplicidad, pero preparada para escalar).
+
+**Tarea 1: Configuración de Dependencias**
+Por favor, genera el contenido para el archivo `libs.versions.toml` con las versiones más estables y recientes para:
+- Android Gradle Plugin
+- Kotlin
+- Compose BOM
+- Navigation Compose
+- Material3
+- Coroutines
+
+También, dame los cambios necesarios para `build.gradle.kts` (Project) y `build.gradle.kts` (Module: app) para usar este catálogo de versiones."
+
+---
+
+## Prompt 2: Módulo Core UI (Tema y Estilos)
+
+"Excelente. Ahora vamos a definir la base visual.
+**Tarea 2: Core UI**
+Genera los archivos necesarios para el tema de la aplicación en un paquete `ui.theme`.
+Necesito:
+1. `Color.kt`: Define una paleta de colores moderna (puedes usar morado y verde azulado como base, o lo que sugieras que se vea profesional).
+2. `Type.kt`: Tipografía usando Material3.
+3. `Theme.kt`: El composable `AppTheme` que soporte modo claro y oscuro.
+Asegúrate de que todo use Material3."
+
+---
+
+## Prompt 3: Estructura de Navegación y Sidebar (Drawer)
+
+"Ahora vamos a implementar la navegación principal con un Sidebar (Navigation Drawer).
+**Tarea 3: Navegación y Menú Lateral**
+1. Crea una sealed class `Screen` en un paquete `navigation` para definir las rutas: 'Home', 'Profile', 'Settings'.
+2. Crea un Composable `AppNavigationDrawer` que reciba:
+    - El `NavController`.
+    - Un lambda para cerrar el drawer.
+    - El contenido de la pantalla (content).
+    - Usa `ModalNavigationDrawer` de Material3.
+3. El contenido del drawer (`DrawerSheet`) debe tener un encabezado bonito y los ítems de menú correspondientes a las rutas."
+
+---
+
+## Prompt 4: Pantallas de Funcionalidad (Feature Screens)
+
+"Vamos a crear el contenido de las pantallas.
+**Tarea 4: Pantallas**
+Crea un paquete `ui.screens`. Genera 3 Composables simples pero visualmente agradables para:
+1. `HomeScreen`: Debe tener un `Scaffold` con `TopAppBar` que tenga el botón de menú (hamburguesa) para abrir el drawer. Muestra un contenido de bienvenida.
+2. `ProfileScreen`: Un diseño simple de perfil de usuario.
+3. `SettingsScreen`: Una lista de opciones simulada.
+
+Nota: Asegúrate de que la `TopAppBar` reciba una función `onMenuClick` para abrir el drawer."
+
+---
+
+## Prompt 5: Integración Final (MainActivity)
+
+"Finalmente, unamos todo.
+**Tarea 5: Main Activity y Grafo de Navegación**
+1. Crea el `AppNavigationGraph` que defina el `NavHost` y conecte las rutas (`Screen`) con sus respectivos Composables (`HomeScreen`, `ProfileScreen`, etc.).
+2. Actualiza `MainActivity.kt` para:
+    - Configurar el `AppTheme`.
+    - Inicializar el `rememberNavController`.
+    - Implementar el `AppNavigationDrawer` como contenedor raíz.
+    - Manejar el estado del `DrawerState` para abrirlo desde las pantallas.
+
+Dame el código completo de `MainActivity.kt` y cualquier función de extensión necesaria para que el botón de menú en las pantallas abra el drawer."
