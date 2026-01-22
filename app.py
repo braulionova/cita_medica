@@ -7,7 +7,8 @@ from flask import Flask, render_template, request, redirect, session, url_for, f
 from supabase import create_client, Client
 from postgrest.exceptions import APIError
 from dotenv import load_dotenv
-from datetime import datetime, date  # Importamos tanto datetime como date
+from datetime import datetime, date, time, timedelta  # Importamos tanto datetime como date, time y timedelta
+import pytz  # Para manejo de zonas horarias
 from queue import Queue, Empty # <-- Importa la clase Queue
 # 👇 AÑADIR ESTAS DOS importaciones para hashear contraseñas
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -321,13 +322,13 @@ def get_dias_llenos(config=None):
             fecha = cita["fecha"]
             conteo[fecha] = conteo.get(fecha, 0) + 1
         
-        # Convertimos a lista ordenada por fecha
+# Convertimos a lista ordenada por fecha
         citas_por_dia = [{"fecha": f, "cantidad": c} for f, c in sorted(conteo.items())]
         
         for item in citas_por_dia:
             fecha_str = item['fecha']
             cantidad = item['cantidad']
-            
+             
             fecha_obj = datetime.strptime(fecha_str, '%Y-%m-%d').date()
             dia_semana = fecha_obj.weekday() # Lunes=0, Martes=1, ...
             
@@ -345,6 +346,34 @@ def get_dias_llenos(config=None):
         print(f"Error calculando días llenos: {e}")
 
     return dias_llenos
+
+def verificar_cita_duplicada(fecha_str, cedula_raw, nombre, telefono):
+    """
+    Verifica si ya existe una cita para el mismo paciente y fecha.
+    Retorna True si existe duplicado, False si es seguro continuar.
+    """
+    try:
+        # Construimos la consulta base para la fecha
+        query = supabase.table("citas").select("id", count='exact').eq("fecha", fecha_str)
+
+        # Añadimos el identificador del paciente a la consulta
+        if cedula_raw:
+            # Si hay cédula, es el mejor identificador
+            query = query.eq("cedula", cedula_raw)
+        else:
+            # Si no, usamos la combinación de nombre y teléfono
+            query = query.eq("nombre", nombre).eq("telefono", telefono)
+        
+        # Ejecutamos la consulta
+        existing_cita_result = query.execute()
+
+        # Si el contador es mayor que 0, ya existe una cita
+        return existing_cita_result.count > 0
+
+    except Exception as e:
+        print(f"Error al verificar cita duplicada: {e}")
+        # En caso de error, permitimos continuar (no bloqueamos)
+        return False
     
 # @app.route("/admin/configuracion", methods=["GET", "POST"])
 # @role_required('admin')  # Solo administradores pueden acceder aquí
@@ -487,7 +516,7 @@ def registrar_cita():
             flash("❌ La fecha seleccionada no es válida.", "error")
             return redirect(url_for("registrar_cita"))
 
-        # --- Validaciones de fechas ---
+# --- Validaciones de fechas ---
         if config.get('bloquear_sabados') == 'true' and fecha_obj.weekday() == 5:
             flash("❌ No se pueden agendar citas los sábados.", "error")
             return redirect(url_for("registrar_cita"))
@@ -495,6 +524,37 @@ def registrar_cita():
         if config.get('bloquear_domingos') == 'true' and fecha_obj.weekday() == 6:
             flash("❌ No se pueden agendar citas los domingos.", "error")
             return redirect(url_for("registrar_cita"))
+
+        # --- Validación de hora para día actual (República Dominicana) ---
+        try:
+            # Obtener hora actual en zona horaria de República Dominicana (AST/UTC-4)
+            zona_rd = pytz.timezone('America/Santo_Domingo')
+            hora_actual_rd = datetime.now(zona_rd)
+            
+            # Verificar si la fecha seleccionada es hoy
+            hoy_rd = hora_actual_rd.date()
+            
+            if fecha_obj == hoy_rd:
+                # Si es hoy, verificar si es después de las 12:00 pm
+                limite_pm = hora_actual_rd.replace(hour=12, minute=0, second=0, microsecond=0)
+                
+                if hora_actual_rd >= limite_pm:
+                    flash("❌ No se pueden registrar citas para hoy después de las 12:00 PM (hora República Dominicana). Por favor, seleccione otra fecha.", "error")
+                    return redirect(url_for("registrar_cita"))
+                    
+        except pytz.exceptions.UnknownTimeZoneError:
+            # Si hay error con la zona horaria, usar UTC-4 como fallback
+            print("⚠️ Error con zona horaria, usando UTC-4 como fallback")
+            hora_actual = datetime.utcnow() - timedelta(hours=4)
+            hoy = hora_actual.date()
+            
+            if fecha_obj == hoy:
+                if hora_actual.hour >= 12:
+                    flash("❌ No se pueden registrar citas para hoy después de las 12:00 PM. Por favor, seleccione otra fecha.", "error")
+                    return redirect(url_for("registrar_cita"))
+        except Exception as e:
+            print(f"⚠️ Error en validación de hora: {e}")
+            # Continuar sin la restricción si hay error
 
         if fecha_str in fechas_bloqueadas_manualmente:
             flash("❌ La fecha seleccionada no está disponible. Por favor, elija otra.", "error")
@@ -2056,6 +2116,12 @@ def registrar_cita_admin():
             print(f"⚠️ Error al guardar/actualizar paciente desde el panel de admin: {e}")
             flash("⚠️ Hubo un problema al guardar los datos maestros del paciente, pero la cita se registrará igualmente.", "warning")
         
+# --- NUEVO: VALIDACIÓN DE CITA DUPLICADA ---
+        if verificar_cita_duplicada(fecha_str, cedula_raw, nombre, telefono):
+            flash("❌ Ya existe una cita registrada para este paciente en la misma fecha. Por favor, verifique.", "error")
+            return redirect(url_for("registrar_cita_admin"))
+        # --- FIN DE LA VALIDACIÓN ---
+
         # Preparar datos para la tabla de citas
         data_cita = {
             "nombre": nombre, "telefono": telefono, "fecha": fecha_str,
@@ -2131,6 +2197,12 @@ def registrar_cita_secretaria():
         numero_seguro_medico = request.form["numero_seguro_medico"]
         nombre_seguro_medico = request.form["nombre_seguro_medico"]
         cedula = request.form.get("cedula", "")  # Obtener la cédula, si está vacía será ""
+
+# --- NUEVO: VALIDACIÓN DE CITA DUPLICADA ---
+        if verificar_cita_duplicada(fecha_str, cedula, nombre, telefono):
+            flash("❌ Ya existe una cita registrada para este paciente en la misma fecha. Por favor, verifique.", "error")
+            return redirect(url_for("registrar_cita_secretaria"))
+        # --- FIN DE LA VALIDACIÓN ---
 
         data = {
             "nombre": nombre, "telefono": telefono, "fecha": fecha_str,
@@ -2892,13 +2964,34 @@ def buscar_paciente(cedula):
                 print(f"Error al buscar en 'pacientes' para {cedula}: {e}")
                 # Continuar para devolver 404
 
-        # --- PASO 3: Si no se encuentra en ninguna tabla ---
+# --- PASO 3: Si no se encuentra en ninguna tabla ---
         print(f"No se encontraron datos para la cédula {cedula} en ninguna tabla.")
         return jsonify({}), 404
 
     except Exception as e:
         print(f"Error CRÍTICO al buscar paciente por cédula '{cedula}': {e}")
         return jsonify({"error": str(e)}), 500
+
+@app.route('/api/verificar_cita', methods=['POST'])
+def api_verificar_cita():
+    """API endpoint para verificar citas duplicadas desde frontend"""
+    try:
+        data = request.get_json()
+        fecha_str = data.get('fecha')
+        cedula_raw = data.get('cedula', '').strip() or None
+        nombre = data.get('nombre', '').strip()
+        telefono = data.get('telefono', '').strip()
+        
+        existe = verificar_cita_duplicada(fecha_str, cedula_raw, nombre, telefono)
+        
+        return jsonify({
+            'exists': existe,
+            'message': 'Ya existe una cita para esta fecha' if existe else 'Fecha disponible'
+        })
+        
+    except Exception as e:
+        print(f"Error en API verificar_cita: {e}")
+        return jsonify({'error': str(e)}), 500
 
 # ======================================================
 # --- INICIO: RUTAS CRUD PARA GESTIÓN DE SERVICIOS ---

@@ -95,7 +95,7 @@
         </select>
       </div> 
       <!-- Botón -->
-      <button type="submit"
+<button id="submit-btn-admin" type="submit"
         class="w-full bg-blue-600 text-white py-2 sm:py-3 px-4 rounded-lg hover:bg-blue-700 transition text-sm sm:text-base">
         Registrar Cita
       </button>
@@ -217,11 +217,99 @@ document.addEventListener('DOMContentLoaded', function () {
       }
     });
 
-    closePopupButton.addEventListener('click', hidePopup);
+closePopupButton.addEventListener('click', hidePopup);
     errorPopup.addEventListener('click', (event) => {
       if (event.target === event.currentTarget) hidePopup();
     });
-});
+
+    // --- 4. LÓGICA DE BLOQUEO DE BOTÓN CON VERIFICACIÓN ASÍNCRONA ---
+    async function checkDuplicateAppointment() {
+      const fecha = document.getElementById('fecha').value;
+      const cedula = document.getElementById('cedula').value.trim();
+      const nombre = document.getElementById('nombre').value.trim();
+      const telefono = document.getElementById('telefono').value.trim();
+      
+      if (!fecha || (!nombre && !telefono)) return false;
+      
+      try {
+        const response = await fetch('/api/verificar_cita', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({fecha, cedula, nombre, telefono})
+        });
+        
+        const result = await response.json();
+        if (result.exists) {
+          showPopup('⚠️ ' + result.message);
+          return true;
+        }
+      } catch (error) {
+        console.error('Error verificando cita:', error);
+      }
+      return false;
+    }
+
+    function setupSubmitButton(buttonId, formSelector) {
+      const button = document.getElementById(buttonId);
+      const form = document.querySelector(formSelector);
+      
+      if (!button || !form) {
+        console.error(`No se encontró el botón ${buttonId} o el formulario ${formSelector}`);
+        return;
+      }
+      
+      function validateForm() {
+        const nombre = document.getElementById('nombre').value.trim();
+        const telefono = document.getElementById('telefono').value.trim();
+        const fecha = document.getElementById('fecha').value;
+        const motivo = document.getElementById('motivo').value;
+        
+        if (!nombre || !telefono || !fecha || !motivo) {
+          showPopup('Por favor, complete todos los campos obligatorios.');
+          return false;
+        }
+        return true;
+      }
+      
+      function blockButton() {
+        button.disabled = true;
+        button.innerHTML = '⏳ Procesando...';
+        button.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+        button.classList.add('bg-gray-400', 'cursor-not-allowed', 'opacity-75');
+      }
+      
+      function unblockButton() {
+        button.disabled = false;
+        button.innerHTML = 'Registrar Cita';
+        button.classList.remove('bg-gray-400', 'cursor-not-allowed', 'opacity-75');
+        button.classList.add('bg-blue-600', 'hover:bg-blue-700');
+      }
+      
+      form.addEventListener('submit', async function(e) {
+        if (!validateForm()) {
+          e.preventDefault();
+          return;
+        }
+        
+        // Verificar duplicados de forma asíncrona
+        const hasDuplicate = await checkDuplicateAppointment();
+        if (hasDuplicate) {
+          e.preventDefault();
+          return;
+        }
+        
+        blockButton();
+        
+        // Timeout de seguridad (30 segundos)
+        setTimeout(() => {
+          unblockButton();
+        }, 30000);
+      });
+    }
+
+    // Inicializar el botón de envío para admin
+    setupSubmitButton('submit-btn-admin', 'form');
+  });
 </script>
 <!-- FIN: SCRIPT UNIFICADO -->
 
